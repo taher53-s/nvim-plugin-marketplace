@@ -27,7 +27,7 @@ The goal of this project is to gradually evolve into a full plugin marketplace w
 ```bash
 git clone https://github.com/taher53-s/nvim-plugin-marketplace.git
 cd nvim-plugin-marketplace
-
+```
 ---
 
 ## Run the Plugin Locally
