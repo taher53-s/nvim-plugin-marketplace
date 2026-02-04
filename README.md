@@ -34,7 +34,7 @@ cd nvim-plugin-marketplace
 
 Since this project is under development and not installed via a plugin manager yet, start Neovim with the repository added to the runtime path:
 ```
-nvim --clean --cmd "set rtp+=."
+nvim --clean --cmd "set loadplugins | set rtp+=."
 ```
 Then inside Neovim, run:
 ```
