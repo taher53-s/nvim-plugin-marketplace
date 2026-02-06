@@ -1,26 +1,44 @@
-local buffer = require("marketplace.buffer")
-local data = require("marketplace.data")
+-- Handles window creation and UI setup
 
 local M = {}
 
+local buffer = require("marketplace.buffer")
+local data = require("marketplace.data")
+
 function M.open()
-  local lines = { " Neovim Plugin Marketplace ", "" }
+	-- create buffer
+	local bufnr = vim.api.nvim_create_buf(false, true)
 
-  for _, plugin in ipairs(data.plugins) do
-    table.insert(lines, "• " .. plugin.name .. " — " .. plugin.desc)
-  end
+	-- window size
+	local width = 50
+	local height = 15
 
-  local buf = buffer.create(lines)
+	-- center window
+	local row = math.floor((vim.o.lines - height) / 2)
+	local col = math.floor((vim.o.columns - width) / 2)
 
-  vim.api.nvim_open_win(buf, true, {
-    relative = "editor",
-    width = 60,
-    height = 15,
-    row = 5,
-    col = 10,
-    style = "minimal",
-    border = "rounded",
-  })
+	-- create floating window
+	local win = vim.api.nvim_open_win(bufnr, true, {
+		relative = "editor",
+		width = width,
+		height = height,
+		row = row,
+		col = col,
+		style = "minimal",
+		border = "rounded",
+	})
+
+	-- highlight group for selection
+	vim.api.nvim_set_hl(0, "MarketplaceSelected", {
+		bg = "#2a2a2a",
+		bold = true,
+	})
+
+	-- render list
+	buffer.render(bufnr, data.plugins)
+
+	-- ensure cursor starts at first item
+	vim.api.nvim_win_set_cursor(win, { 1, 0 })
 end
 
 return M
