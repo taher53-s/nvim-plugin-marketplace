@@ -15,9 +15,17 @@ function M.render(bufnr, items, on_select)
 
 	-- build list lines
 	local lines = {}
+
+	-- plugin list
 	for i, item in ipairs(items) do
 		table.insert(lines, i .. ". " .. item.name)
 	end
+
+	-- spacer line
+	table.insert(lines, "")
+
+	-- footer help
+	table.insert(lines, "j/k: move   Enter: preview   q: quit")
 
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
