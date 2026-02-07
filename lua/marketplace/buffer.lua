@@ -26,18 +26,20 @@ function M.render(bufnr, items, on_select)
 	state.current_index = 1
 	M.highlight(bufnr)
 
-	-- j → move down
+	-- j → move down + update preview
 	vim.keymap.set("n", "j", function()
 		state.move(1, #items)
 		vim.api.nvim_win_set_cursor(0, { state.current_index, 0 })
 		M.highlight(bufnr)
+		on_select(items[state.current_index])
 	end, { buffer = bufnr })
 
-	-- k → move up
+	-- k → move up + update preview
 	vim.keymap.set("n", "k", function()
 		state.move(-1, #items)
 		vim.api.nvim_win_set_cursor(0, { state.current_index, 0 })
 		M.highlight(bufnr)
+		on_select(items[state.current_index])
 	end, { buffer = bufnr })
 
 	-- Enter → call UI-provided callback

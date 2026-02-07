@@ -28,7 +28,7 @@ function M.open(config)
 	-- RIGHT WINDOW (preview)
 	local preview_buf = vim.api.nvim_create_buf(false, true)
 
-	vim.api.nvim_open_win(preview_buf, false, {
+	local preview_win = vim.api.nvim_open_win(preview_buf, false, {
 		relative = "editor",
 		width = width,
 		height = height,
@@ -37,6 +37,16 @@ function M.open(config)
 		style = "minimal",
 		border = config.border,
 	})
+
+	-- close marketplace with q
+	vim.keymap.set("n", "q", function()
+		if vim.api.nvim_win_is_valid(list_win) then
+			vim.api.nvim_win_close(list_win, true)
+		end
+		if vim.api.nvim_win_is_valid(preview_win) then
+			vim.api.nvim_win_close(preview_win, true)
+		end
+	end, { buffer = list_buf })
 
 	-- highlight group
 	vim.api.nvim_set_hl(0, "MarketplaceSelected", {
