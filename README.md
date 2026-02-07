@@ -27,26 +27,26 @@ The goal of this project is to gradually evolve into a full plugin marketplace w
 ```bash
 git clone https://github.com/taher53-s/nvim-plugin-marketplace.git
 cd nvim-plugin-marketplace
-
+```
 ---
 
 ## Run the Plugin Locally
 
 Since this project is under development and not installed via a plugin manager yet, start Neovim with the repository added to the runtime path:
-
-nvim --clean --cmd "set rtp+=."
-
+```
+nvim --clean --cmd "set loadplugins | set rtp+=."
+```
 Then inside Neovim, run:
-
+```
 :Marketplace
-
+```
 
 This will open the marketplace UI in a floating window.
 
 ---
 
 ## Project Structure
-
+```
 nvim-plugin-marketplace/
 ├── lua/
 │   └── marketplace/
@@ -58,7 +58,8 @@ nvim-plugin-marketplace/
 │   └── marketplace.lua    # Defines :Marketplace command
 ├── README.md
 └── LICENSE
-
+```
+---
 ## Planned Improvements
 	•	Keyboard navigation (j / k, Enter)
 	•	Plugin preview panel
