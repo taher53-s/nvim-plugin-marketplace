@@ -1,23 +1,39 @@
--- This file stores shared state for the marketplace
--- Right now, it only tracks which item is selected
+-- Stores shared state for marketplace UI
 
 local M = {}
 
--- Index of the currently selected plugin (1-based)
+-- index of selected item
 M.current_index = 1
 
--- Move selection up or down
--- delta: +1 (down) or -1 (up)
--- max: total number of items
+-- current search query
+M.query = ""
+
+-- filter items based on query
+function M.filter(items)
+	if M.query == "" then
+		return items
+	end
+
+	local result = {}
+	local q = M.query:lower()
+
+	for _, item in ipairs(items) do
+		if item.name:lower():find(q, 1, true) then
+			table.insert(result, item)
+		end
+	end
+
+	return result
+end
+
+-- move selection safely
 function M.move(delta, max)
 	local next_index = M.current_index + delta
 
-	-- prevent going above first item
 	if next_index < 1 then
 		next_index = 1
 	end
 
-	-- prevent going below last item
 	if next_index > max then
 		next_index = max
 	end

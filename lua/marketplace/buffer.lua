@@ -1,19 +1,18 @@
 -- Responsible for rendering the list buffer
--- Handles navigation, highlighting, and selection
+-- Handles navigation, highlighting, and search
 
 local M = {}
 
 local state = require("marketplace.state")
-
--- Namespace for highlights
 local ns = vim.api.nvim_create_namespace("marketplace")
 
--- Render plugin list
--- on_select is a callback provided by UI layer
-function M.render(bufnr, items, on_select)
+-- render list
+function M.render(bufnr, all_items, on_select)
+	-- apply filter
+	local items = state.filter(all_items)
+
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 
-	-- build list lines
 	local lines = {}
 
 	-- plugin list
@@ -21,43 +20,80 @@ function M.render(bufnr, items, on_select)
 		table.insert(lines, i .. ". " .. item.name)
 	end
 
-	-- spacer line
+	-- spacer
 	table.insert(lines, "")
 
-	-- footer help
-	table.insert(lines, "j/k: move   Enter: preview   q: quit")
+	-- footer
+	if state.query ~= "" then
+		table.insert(lines, "Search: " .. state.query .. "   (Esc to clear)")
+	else
+		table.insert(lines, "j/k: move   Enter: preview   /: search   q: quit")
+	end
 
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 
-	-- reset selection
-	state.current_index = 1
+	-- reset selection if needed
+	if state.current_index > #items then
+		state.current_index = #items
+	end
+	if state.current_index < 1 then
+		state.current_index = 1
+	end
+
 	M.highlight(bufnr)
 
-	-- j → move down + update preview
+	-- navigation
 	vim.keymap.set("n", "j", function()
 		state.move(1, #items)
 		vim.api.nvim_win_set_cursor(0, { state.current_index, 0 })
 		M.highlight(bufnr)
-		on_select(items[state.current_index])
+
+		local plugin = items[state.current_index]
+		if plugin then
+			on_select(plugin)
+		end
 	end, { buffer = bufnr })
 
-	-- k → move up + update preview
 	vim.keymap.set("n", "k", function()
 		state.move(-1, #items)
 		vim.api.nvim_win_set_cursor(0, { state.current_index, 0 })
 		M.highlight(bufnr)
-		on_select(items[state.current_index])
+
+		local plugin = items[state.current_index]
+		if plugin then
+			on_select(plugin)
+		end
 	end, { buffer = bufnr })
 
-	-- Enter → call UI-provided callback
+	-- enter → select
 	vim.keymap.set("n", "<CR>", function()
 		local plugin = items[state.current_index]
-		on_select(plugin)
+		if plugin then
+			on_select(plugin)
+		end
+	end, { buffer = bufnr })
+
+	-- / → search
+	vim.keymap.set("n", "/", function()
+		vim.ui.input({ prompt = "Search: " }, function(input)
+			state.query = input or ""
+			state.current_index = 1
+			M.render(bufnr, all_items, on_select)
+		end)
+	end, { buffer = bufnr })
+
+	-- Esc → clear search
+	vim.keymap.set("n", "<Esc>", function()
+		if state.query ~= "" then
+			state.query = ""
+			state.current_index = 1
+			M.render(bufnr, all_items, on_select)
+		end
 	end, { buffer = bufnr })
 end
 
--- Highlight selected line
+-- highlight selected item
 function M.highlight(bufnr)
 	vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 
