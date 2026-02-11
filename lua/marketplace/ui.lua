@@ -4,10 +4,18 @@ local M = {}
 
 local buffer = require("marketplace.buffer")
 local data = require("marketplace.data")
+local state = require("marketplace.state")
 
 function M.open(config)
+	state.load()
 	-- LEFT WINDOW (list)
 	local list_buf = vim.api.nvim_create_buf(false, true)
+
+	-- make it a scratch UI buffer
+	vim.api.nvim_buf_set_option(list_buf, "buftype", "nofile")
+	vim.api.nvim_buf_set_option(list_buf, "bufhidden", "wipe")
+	vim.api.nvim_buf_set_option(list_buf, "swapfile", false)
+	vim.api.nvim_buf_set_option(list_buf, "modifiable", false)
 
 	local width = 40
 	local height = 15
@@ -38,7 +46,7 @@ function M.open(config)
 		border = config.border,
 	})
 
-	-- close marketplace with q
+	-- Close marketplace with q
 	vim.keymap.set("n", "q", function()
 		if vim.api.nvim_win_is_valid(list_win) then
 			vim.api.nvim_win_close(list_win, true)
@@ -48,18 +56,36 @@ function M.open(config)
 		end
 	end, { buffer = list_buf })
 
-	-- highlight group
+	-----------------------------------------------------------------
+	-- Highlight Groups
+	-----------------------------------------------------------------
 	vim.api.nvim_set_hl(0, "MarketplaceSelected", {
 		bg = "#2a2a2a",
 		bold = true,
 	})
 
-	-- render list and inject preview callback
+	vim.api.nvim_set_hl(0, "MarketplaceTitle", {
+		bold = true,
+	})
+
+	vim.api.nvim_set_hl(0, "MarketplaceFooter", {
+		fg = "#777777",
+	})
+
+	-----------------------------------------------------------------
+	-- Render list
+	-----------------------------------------------------------------
 	buffer.render(list_buf, data.plugins, function(plugin)
-		M.render_preview(preview_buf, plugin)
+		if plugin then
+			M.render_preview(preview_buf, plugin)
+		else
+			vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, {})
+		end
 	end)
 
 	vim.api.nvim_win_set_cursor(list_win, { 1, 0 })
+
+	vim.cmd("stopinsert")
 end
 
 -- Render preview panel
