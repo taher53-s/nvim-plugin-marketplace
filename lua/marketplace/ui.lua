@@ -9,6 +9,12 @@ function M.open(config)
 	-- LEFT WINDOW (list)
 	local list_buf = vim.api.nvim_create_buf(false, true)
 
+	-- make it a scratch UI buffer
+	vim.api.nvim_buf_set_option(list_buf, "buftype", "nofile")
+	vim.api.nvim_buf_set_option(list_buf, "bufhidden", "wipe")
+	vim.api.nvim_buf_set_option(list_buf, "swapfile", false)
+	vim.api.nvim_buf_set_option(list_buf, "modifiable", false)
+
 	local width = 40
 	local height = 15
 
@@ -76,6 +82,8 @@ function M.open(config)
 	end)
 
 	vim.api.nvim_win_set_cursor(list_win, { 1, 0 })
+
+	vim.cmd("stopinsert")
 end
 
 -- Render preview panel

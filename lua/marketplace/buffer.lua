@@ -107,6 +107,11 @@ function M.render(bufnr, all_items, on_select)
 			M.render(bufnr, all_items, on_select)
 		end
 	end, { buffer = bufnr })
+
+	-- disable insert mode
+	vim.keymap.set("n", "i", "<Nop>", { buffer = bufnr })
+	vim.keymap.set("n", "a", "<Nop>", { buffer = bufnr })
+	vim.keymap.set("n", "o", "<Nop>", { buffer = bufnr })
 end
 
 ---------------------------------------------------------------------
