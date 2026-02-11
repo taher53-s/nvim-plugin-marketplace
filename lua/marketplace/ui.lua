@@ -4,8 +4,10 @@ local M = {}
 
 local buffer = require("marketplace.buffer")
 local data = require("marketplace.data")
+local state = require("marketplace.state")
 
 function M.open(config)
+	state.load()
 	-- LEFT WINDOW (list)
 	local list_buf = vim.api.nvim_create_buf(false, true)
 
