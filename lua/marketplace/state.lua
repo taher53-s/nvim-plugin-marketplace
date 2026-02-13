@@ -124,15 +124,18 @@ function M.uninstall(plugin)
 	M.installed[plugin.name] = nil
 	M.save()
 end
+
 -------------------------------------------------
--- Check install state
+-- Check if plugin is installed (filesystem truth)
 -------------------------------------------------
 function M.is_installed(plugin)
-	return M.installed[plugin.name] == true
-end
+	local path = M.get_plugin_path(plugin)
 
-function M.get_plugin_path(plugin)
-	return M.install_path .. "/" .. plugin.name
+	if vim.fn.isdirectory(path) == 1 then
+		return true
+	end
+
+	return false
 end
 
 -------------------------------------------------
