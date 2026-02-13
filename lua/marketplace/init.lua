@@ -4,6 +4,7 @@
 local M = {}
 
 local ui = require("marketplace.ui")
+local state = require("marketplace.state")
 
 M.config = {
 	border = "rounded",
@@ -13,6 +14,9 @@ M.config = {
 -- Allow user configuration (future-proofing)
 function M.setup(opts)
 	M.config = vim.tbl_extend("force", M.config, opts or {})
+
+	state.load()
+	state.load_installed_plugins()
 end
 
 -- Entry point called by :Marketplace

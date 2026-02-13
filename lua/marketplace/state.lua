@@ -135,4 +135,19 @@ function M.get_plugin_path(plugin)
 	return M.install_path .. "/" .. plugin.name
 end
 
+-------------------------------------------------
+-- Load installed plugins into runtimepath
+-------------------------------------------------
+function M.load_installed_plugins()
+	for name, installed in pairs(M.installed) do
+		if installed then
+			local path = M.install_path .. "/" .. name
+
+			if vim.fn.isdirectory(path) == 1 then
+				vim.opt.rtp:append(path)
+			end
+		end
+	end
+end
+
 return M
