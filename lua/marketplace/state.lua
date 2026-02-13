@@ -2,6 +2,7 @@ local M = {}
 
 -- File path for persistence
 local data_path = vim.fn.stdpath("data") .. "/marketplace.json"
+M.install_path = vim.fn.stdpath("data") .. "/marketplace_plugins"
 
 M.current_index = 1
 M.query = ""
@@ -38,7 +39,8 @@ function M.load()
 	end
 end
 
--------------------------------------------------
+--------rm -rf ~/.config/nvim/.git
+-----------------------------------------
 -- Filter items based on search
 -------------------------------------------------
 function M.filter(items)
@@ -94,6 +96,10 @@ end
 -------------------------------------------------
 function M.is_installed(plugin)
 	return M.installed[plugin.name] == true
+end
+
+function M.get_plugin_path(plugin)
+	return M.install_path .. "/" .. plugin.name
 end
 
 return M

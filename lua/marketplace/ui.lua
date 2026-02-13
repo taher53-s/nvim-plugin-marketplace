@@ -92,13 +92,27 @@ end
 function M.render_preview(bufnr, plugin)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 
+	if not plugin then
+		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, {})
+		vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
+		return
+	end
+
+	local state = require("marketplace.state")
+
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, {
-		"📦 " .. plugin.name,
+		"Plugin: " .. plugin.name,
 		"",
+		"Description:",
 		plugin.desc,
+		"",
+		"Repository:",
+		plugin.repo,
+		"",
+		"Install Path:",
+		state.get_plugin_path(plugin),
 	})
 
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 end
-
 return M
