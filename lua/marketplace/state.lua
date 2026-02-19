@@ -193,6 +193,38 @@ function M.uninstall(plugin)
 end
 
 -------------------------------------------------
+-- Update plugin (git pull)
+-------------------------------------------------
+function M.update(plugin)
+	local path = M.get_plugin_path(plugin)
+
+	if vim.fn.isdirectory(path) ~= 1 then
+		print(plugin.name .. " is not installed")
+		return false, "Plugin not installed"
+	end
+
+	print("Updating " .. plugin.name .. "...")
+
+	local cmd = {
+		"git",
+		"-C",
+		path,
+		"pull",
+	}
+
+	local success, result = utils.run(cmd)
+
+	if success then
+		print("Updated " .. plugin.name)
+		return true, "Update successful"
+	else
+		print("Update failed:")
+		print(result)
+		return false, result
+	end
+end
+
+-------------------------------------------------
 -- Check if plugin is installed (filesystem truth)
 -------------------------------------------------
 function M.is_installed(plugin)
