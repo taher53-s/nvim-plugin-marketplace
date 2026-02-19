@@ -1,6 +1,7 @@
 local M = {}
 
 local utils = require("marketplace.utils")
+local data = require("marketplace.data")
 
 -- File path for persistence
 local data_path = vim.fn.stdpath("data") .. "/marketplace.json"
@@ -117,6 +118,18 @@ function M.move(delta, max)
 end
 
 -------------------------------------------------
+-- Find plugin definition by name
+-------------------------------------------------
+function M.find_plugin_by_name(name)
+	for _, plugin in ipairs(data.plugins) do
+		if plugin.name == name then
+			return plugin
+		end
+	end
+	return nil
+end
+
+-------------------------------------------------
 -- Install plugin (real git clone)
 -------------------------------------------------
 function M.install(plugin)
@@ -124,6 +137,19 @@ function M.install(plugin)
 
 	local path = M.get_plugin_path(plugin)
 
+	-- Install dependencies first
+	if plugin.dependencies then
+		for _, dep_name in ipairs(plugin.dependencies) do
+			local dep_plugin = M.find_plugin_by_name(dep_name)
+
+			if dep_plugin and not M.is_installed(dep_plugin) then
+				print("Installing dependency: " .. dep_name)
+				M.install(dep_plugin)
+			end
+		end
+	end
+
+	-- Skip if already installed
 	if vim.fn.isdirectory(path) == 1 then
 		print(plugin.name .. " already installed")
 		return
@@ -151,7 +177,6 @@ function M.install(plugin)
 		print(result)
 	end
 end
-
 -------------------------------------------------
 -- Uninstall plugin
 -------------------------------------------------

@@ -2,11 +2,19 @@ local M = {}
 
 M.plugins = {
 	{
+		name = "plenary.nvim",
+		desc = "Lua utility functions used by many plugins",
+		repo = "https://github.com/nvim-lua/plenary.nvim",
+		author = "nvim-lua",
+		stars = 0,
+	},
+	{
 		name = "telescope.nvim",
 		desc = "Fuzzy finder",
 		repo = "https://github.com/nvim-telescope/telescope.nvim",
 		author = "nvim-telescope",
 		stars = 0,
+		dependencies = { "plenary.nvim" },
 	},
 	{
 		name = "nvim-tree.lua",
