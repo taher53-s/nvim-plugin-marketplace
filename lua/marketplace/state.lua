@@ -1,5 +1,7 @@
 local M = {}
 
+M.installing = {}
+
 local utils = require("marketplace.utils")
 local data = require("marketplace.data")
 
@@ -135,14 +137,27 @@ end
 function M.install(plugin, on_done)
 	M.ensure_install_dir()
 
+	local name = plugin.name
 	local path = M.get_plugin_path(plugin)
 
-	if vim.fn.isdirectory(path) == 1 then
+	-- Prevent duplicate install
+	if M.installing[name] then
 		if on_done then
-			on_done(true, plugin.name .. " already installed")
+			on_done(false, "Install already in progress")
 		end
 		return
 	end
+
+	-- Skip if already installed
+	if vim.fn.isdirectory(path) == 1 then
+		if on_done then
+			on_done(true, "Already installed")
+		end
+		return
+	end
+
+	-- Mark as installing
+	M.installing[name] = true
 
 	local cmd = {
 		"git",
@@ -152,10 +167,14 @@ function M.install(plugin, on_done)
 		plugin.repo,
 		path,
 	}
+
 	utils.run_async(cmd, function(success, result)
 		vim.schedule(function()
+			-- Clear installing flag
+			M.installing[name] = nil
+
 			if success then
-				M.installed[plugin.name] = true
+				M.installed[name] = true
 				M.save()
 
 				if on_done then
@@ -163,7 +182,7 @@ function M.install(plugin, on_done)
 				end
 			else
 				if on_done then
-					on_done(false, result)
+					on_done(false, "Install failed")
 				end
 			end
 		end)
