@@ -1,5 +1,7 @@
 local M = {}
 
+local utils = require("marketplace.utils")
+
 -- File path for persistence
 local data_path = vim.fn.stdpath("data") .. "/marketplace.json"
 
@@ -122,7 +124,6 @@ function M.install(plugin)
 
 	local path = M.get_plugin_path(plugin)
 
-	-- Do not reinstall if already exists
 	if vim.fn.isdirectory(path) == 1 then
 		print(plugin.name .. " already installed")
 		return
@@ -133,13 +134,15 @@ function M.install(plugin)
 	local cmd = {
 		"git",
 		"clone",
+		"--depth",
+		"1",
 		plugin.repo,
 		path,
 	}
 
-	local result = vim.fn.system(cmd)
+	local success, result = utils.run(cmd)
 
-	if vim.v.shell_error == 0 then
+	if success then
 		M.installed[plugin.name] = true
 		print("Installed " .. plugin.name)
 		M.save()
