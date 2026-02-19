@@ -152,13 +152,17 @@ end
 
 -------------------------------------------------
 -- Load installed plugins into runtimepath
+-- Prevent duplicate runtimepath entries
 -------------------------------------------------
 function M.load_installed_plugins()
 	for name, _ in pairs(M.installed) do
 		local path = M.install_path .. "/" .. name
 
 		if vim.fn.isdirectory(path) == 1 then
-			vim.opt.rtp:append(path)
+			-- Only append if not already in runtimepath
+			if not string.find(vim.o.runtimepath, path, 1, true) then
+				vim.opt.rtp:append(path)
+			end
 		end
 	end
 end
