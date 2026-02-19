@@ -18,18 +18,21 @@ local LIST_START_LINE = 3
 -- Setup keymaps (only once)
 ---------------------------------------------------------------------
 local function set_keymaps(bufnr, all_items, on_select)
+	-- Move down
 	vim.keymap.set("n", "j", function()
 		local items = state.filter(all_items)
 		state.move(1, #items)
 		M.update_selection(bufnr, items, on_select)
 	end, { buffer = bufnr })
 
+	-- Move up
 	vim.keymap.set("n", "k", function()
 		local items = state.filter(all_items)
 		state.move(-1, #items)
 		M.update_selection(bufnr, items, on_select)
 	end, { buffer = bufnr })
 
+	-- Enter → preview
 	vim.keymap.set("n", "<CR>", function()
 		local items = state.filter(all_items)
 		local plugin = items[state.current_index]
@@ -38,6 +41,7 @@ local function set_keymaps(bufnr, all_items, on_select)
 		end
 	end, { buffer = bufnr })
 
+	-- Search
 	vim.keymap.set("n", "/", function()
 		vim.ui.input({ prompt = "Search: " }, function(input)
 			state.query = input or ""
@@ -46,6 +50,7 @@ local function set_keymaps(bufnr, all_items, on_select)
 		end)
 	end, { buffer = bufnr })
 
+	-- Clear search
 	vim.keymap.set("n", "<Esc>", function()
 		if state.query ~= "" then
 			state.query = ""
@@ -54,22 +59,32 @@ local function set_keymaps(bufnr, all_items, on_select)
 		end
 	end, { buffer = bufnr })
 
+	-------------------------------------------------------------------
 	-- Install plugin
+	-------------------------------------------------------------------
 	vim.keymap.set("n", "i", function()
 		local items = state.filter(all_items)
 		local plugin = items[state.current_index]
+
 		if plugin then
+			on_select(plugin, "Installing...")
 			state.install(plugin)
+			on_select(plugin, "Installed successfully")
 			M.render(bufnr, all_items, on_select)
 		end
 	end, { buffer = bufnr })
 
+	-------------------------------------------------------------------
 	-- Uninstall plugin
+	-------------------------------------------------------------------
 	vim.keymap.set("n", "u", function()
 		local items = state.filter(all_items)
 		local plugin = items[state.current_index]
+
 		if plugin then
+			on_select(plugin, "Uninstalling...")
 			state.uninstall(plugin)
+			on_select(plugin, "Uninstalled successfully")
 			M.render(bufnr, all_items, on_select)
 		end
 	end, { buffer = bufnr })
@@ -92,7 +107,7 @@ function M.render(bufnr, all_items, on_select)
 	table.insert(lines, "🛒 Plugin Marketplace")
 	table.insert(lines, "")
 
-	-- Plugin list / empty state
+	-- Plugin list
 	if #items == 0 then
 		table.insert(lines, "No plugins found")
 	else
@@ -118,15 +133,11 @@ function M.render(bufnr, all_items, on_select)
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 
-	-----------------------------------------------------------------
-	-- Static highlights
-	-----------------------------------------------------------------
+	-- Highlights
 	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceTitle", 0, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceFooter", #lines - 1, 0, -1)
 
-	-----------------------------------------------------------------
 	-- Empty state
-	-----------------------------------------------------------------
 	if #items == 0 then
 		state.current_index = 0
 		on_select(nil)
@@ -142,7 +153,7 @@ function M.render(bufnr, all_items, on_select)
 
 	M.update_selection(bufnr, items, on_select)
 
-	-- Set keymaps only once
+	-- Set keymaps once
 	if not vim.b[bufnr].marketplace_mapped then
 		set_keymaps(bufnr, all_items, on_select)
 		vim.b[bufnr].marketplace_mapped = true
