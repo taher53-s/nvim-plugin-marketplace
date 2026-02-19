@@ -1,5 +1,8 @@
 local M = {}
 
+local utils = require("marketplace.utils")
+local data = require("marketplace.data")
+
 -- File path for persistence
 local data_path = vim.fn.stdpath("data") .. "/marketplace.json"
 
@@ -58,6 +61,28 @@ function M.load()
 end
 
 -------------------------------------------------
+-- Synchronize installed state from filesystem
+-------------------------------------------------
+function M.sync_installed_from_filesystem()
+	M.ensure_install_dir()
+
+	local dirs = vim.fn.readdir(M.install_path)
+
+	-- Reset installed table
+	M.installed = {}
+
+	for _, dir in ipairs(dirs) do
+		local full_path = M.install_path .. "/" .. dir
+
+		if vim.fn.isdirectory(full_path) == 1 then
+			M.installed[dir] = true
+		end
+	end
+
+	M.save()
+end
+
+-------------------------------------------------
 -- Filter items based on search
 -------------------------------------------------
 function M.filter(items)
@@ -93,6 +118,18 @@ function M.move(delta, max)
 end
 
 -------------------------------------------------
+-- Find plugin definition by name
+-------------------------------------------------
+function M.find_plugin_by_name(name)
+	for _, plugin in ipairs(data.plugins) do
+		if plugin.name == name then
+			return plugin
+		end
+	end
+	return nil
+end
+
+-------------------------------------------------
 -- Install plugin (real git clone)
 -------------------------------------------------
 function M.install(plugin)
@@ -100,7 +137,19 @@ function M.install(plugin)
 
 	local path = M.get_plugin_path(plugin)
 
-	-- Do not reinstall if already exists
+	-- Install dependencies first
+	if plugin.dependencies then
+		for _, dep_name in ipairs(plugin.dependencies) do
+			local dep_plugin = M.find_plugin_by_name(dep_name)
+
+			if dep_plugin and not M.is_installed(dep_plugin) then
+				print("Installing dependency: " .. dep_name)
+				M.install(dep_plugin)
+			end
+		end
+	end
+
+	-- Skip if already installed
 	if vim.fn.isdirectory(path) == 1 then
 		print(plugin.name .. " already installed")
 		return
@@ -111,13 +160,15 @@ function M.install(plugin)
 	local cmd = {
 		"git",
 		"clone",
+		"--depth",
+		"1",
 		plugin.repo,
 		path,
 	}
 
-	local result = vim.fn.system(cmd)
+	local success, result = utils.run(cmd)
 
-	if vim.v.shell_error == 0 then
+	if success then
 		M.installed[plugin.name] = true
 		print("Installed " .. plugin.name)
 		M.save()
@@ -126,7 +177,6 @@ function M.install(plugin)
 		print(result)
 	end
 end
-
 -------------------------------------------------
 -- Uninstall plugin
 -------------------------------------------------
@@ -143,6 +193,38 @@ function M.uninstall(plugin)
 end
 
 -------------------------------------------------
+-- Update plugin (git pull)
+-------------------------------------------------
+function M.update(plugin)
+	local path = M.get_plugin_path(plugin)
+
+	if vim.fn.isdirectory(path) ~= 1 then
+		print(plugin.name .. " is not installed")
+		return false, "Plugin not installed"
+	end
+
+	print("Updating " .. plugin.name .. "...")
+
+	local cmd = {
+		"git",
+		"-C",
+		path,
+		"pull",
+	}
+
+	local success, result = utils.run(cmd)
+
+	if success then
+		print("Updated " .. plugin.name)
+		return true, "Update successful"
+	else
+		print("Update failed:")
+		print(result)
+		return false, result
+	end
+end
+
+-------------------------------------------------
 -- Check if plugin is installed (filesystem truth)
 -------------------------------------------------
 function M.is_installed(plugin)
@@ -152,13 +234,17 @@ end
 
 -------------------------------------------------
 -- Load installed plugins into runtimepath
+-- Prevent duplicate runtimepath entries
 -------------------------------------------------
 function M.load_installed_plugins()
 	for name, _ in pairs(M.installed) do
 		local path = M.install_path .. "/" .. name
 
 		if vim.fn.isdirectory(path) == 1 then
-			vim.opt.rtp:append(path)
+			-- Only append if not already in runtimepath
+			if not string.find(vim.o.runtimepath, path, 1, true) then
+				vim.opt.rtp:append(path)
+			end
 		end
 	end
 end

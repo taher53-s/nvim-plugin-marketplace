@@ -89,7 +89,7 @@ function M.open(config)
 end
 
 -- Render preview panel
-function M.render_preview(bufnr, plugin)
+function M.render_preview(bufnr, plugin, message)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 
 	if not plugin then
@@ -100,8 +100,11 @@ function M.render_preview(bufnr, plugin)
 
 	local state = require("marketplace.state")
 
-	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, {
+	local lines = {
 		"Plugin: " .. plugin.name,
+		"",
+		"Author: " .. (plugin.author or "Unknown"),
+		"Stars: " .. tostring(plugin.stars or 0),
 		"",
 		"Description:",
 		plugin.desc,
@@ -111,8 +114,16 @@ function M.render_preview(bufnr, plugin)
 		"",
 		"Install Path:",
 		state.get_plugin_path(plugin),
-	})
+	}
 
+	if message then
+		table.insert(lines, "")
+		table.insert(lines, "Status:")
+		table.insert(lines, message)
+	end
+
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 end
+
 return M
