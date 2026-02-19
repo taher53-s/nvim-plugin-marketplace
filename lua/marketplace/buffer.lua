@@ -47,9 +47,15 @@ local function set_keymaps(bufnr, all_items, on_select)
 
 		if plugin then
 			on_select(plugin, "Installing...")
-			state.install(plugin)
-			on_select(plugin, "Installed successfully")
-			M.render(bufnr, all_items, on_select)
+
+			state.install(plugin, function(success, message)
+				if success then
+					on_select(plugin, message)
+				else
+					on_select(plugin, "Install failed")
+				end
+				M.render(bufnr, all_items, on_select)
+			end)
 		end
 	end, { buffer = bufnr })
 

@@ -132,30 +132,17 @@ end
 -------------------------------------------------
 -- Install plugin (real git clone)
 -------------------------------------------------
-function M.install(plugin)
+function M.install(plugin, on_done)
 	M.ensure_install_dir()
 
 	local path = M.get_plugin_path(plugin)
 
-	-- Install dependencies first
-	if plugin.dependencies then
-		for _, dep_name in ipairs(plugin.dependencies) do
-			local dep_plugin = M.find_plugin_by_name(dep_name)
-
-			if dep_plugin and not M.is_installed(dep_plugin) then
-				print("Installing dependency: " .. dep_name)
-				M.install(dep_plugin)
-			end
-		end
-	end
-
-	-- Skip if already installed
 	if vim.fn.isdirectory(path) == 1 then
-		print(plugin.name .. " already installed")
+		if on_done then
+			on_done(true, plugin.name .. " already installed")
+		end
 		return
 	end
-
-	print("Installing " .. plugin.name .. "...")
 
 	local cmd = {
 		"git",
@@ -166,16 +153,20 @@ function M.install(plugin)
 		path,
 	}
 
-	local success, result = utils.run(cmd)
+	utils.run_async(cmd, function(success, result)
+		if success then
+			M.installed[plugin.name] = true
+			M.save()
 
-	if success then
-		M.installed[plugin.name] = true
-		print("Installed " .. plugin.name)
-		M.save()
-	else
-		print("Git clone failed:")
-		print(result)
-	end
+			if on_done then
+				on_done(true, "Installed successfully")
+			end
+		else
+			if on_done then
+				on_done(false, result)
+			end
+		end
+	end)
 end
 -------------------------------------------------
 -- Uninstall plugin

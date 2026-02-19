@@ -1,15 +1,14 @@
 local M = {}
 
 -------------------------------------------------
--- Run a shell command safely
--- Returns:
---   success (boolean)
---   output (string)
+-- Run async system command
+-- callback(success, output)
 -------------------------------------------------
-function M.run(cmd)
-	local result = vim.fn.system(cmd)
-	local success = vim.v.shell_error == 0
-	return success, result
+function M.run_async(cmd, callback)
+	vim.system(cmd, { text = true }, function(obj)
+		local success = obj.code == 0
+		callback(success, obj.stdout or obj.stderr)
+	end)
 end
 
 return M
