@@ -1,15 +1,48 @@
 local M = {}
 
 M.installing = {}
+M.lock = {}
 
 local utils = require("marketplace.utils")
 local data = require("marketplace.data")
+local lockfile_path = vim.fn.stdpath("data") .. "/marketplace-lock.json"
 
 -- File path for persistence
 local data_path = vim.fn.stdpath("data") .. "/marketplace.json"
 
 -- Where plugins will be installed
 M.install_path = vim.fn.stdpath("data") .. "/marketplace_plugins"
+
+-------------------------------------------------
+-- Save lockfile (plugin commit hashes)
+-------------------------------------------------
+function M.save_lockfile()
+	local json = vim.fn.json_encode(M.lock)
+
+	local file = io.open(lockfile_path, "w")
+	if file then
+		file:write(json)
+		file:close()
+	end
+end
+
+-------------------------------------------------
+-- Load lockfile
+-------------------------------------------------
+function M.load_lockfile()
+	local file = io.open(lockfile_path, "r")
+	if not file then
+		return
+	end
+
+	local content = file:read("*a")
+	file:close()
+
+	local ok, decoded = pcall(vim.fn.json_decode, content)
+	if ok and type(decoded) == "table" then
+		M.lock = decoded
+	end
+end
 
 -------------------------------------------------
 -- Ensure install directory exists
@@ -174,9 +207,24 @@ function M.install(plugin, on_done)
 			M.installing[name] = nil
 
 			if success then
-				M.installed[name] = true
-				M.save()
+				-- Get current commit hash
+				local hash_cmd = {
+					"git",
+					"-C",
+					path,
+					"rev-parse",
+					"HEAD",
+				}
 
+				utils.run_async(hash_cmd, function(hash_success, hash_output)
+					vim.schedule(function()
+						if hash_success then
+							local commit = vim.trim(hash_output)
+							M.lock[name] = commit
+							M.save_lockfile()
+						end
+					end)
+				end)
 				if on_done then
 					on_done(true, "Installed successfully")
 				end
