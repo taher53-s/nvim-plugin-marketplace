@@ -45,6 +45,65 @@ function M.load_lockfile()
 end
 
 -------------------------------------------------
+-- Restore all plugins from lockfile
+-------------------------------------------------
+function M.restore_from_lockfile(on_done)
+	M.ensure_install_dir()
+
+	local total = 0
+	local completed = 0
+
+	for name, commit in pairs(M.lock) do
+		total = total + 1
+
+		local plugin = M.find_plugin_by_name(name)
+		if plugin then
+			local path = M.get_plugin_path(plugin)
+
+			-- Clone fresh
+			local clone_cmd = {
+				"git",
+				"clone",
+				plugin.repo,
+				path,
+			}
+
+			utils.run_async(clone_cmd, function(success, _)
+				vim.schedule(function()
+					if success then
+						-- Checkout exact commit
+						local checkout_cmd = {
+							"git",
+							"-C",
+							path,
+							"checkout",
+							commit,
+						}
+
+						utils.run_async(checkout_cmd, function(_, _)
+							vim.schedule(function()
+								M.installed[name] = true
+								M.save()
+
+								completed = completed + 1
+								if completed == total and on_done then
+									on_done()
+								end
+							end)
+						end)
+					else
+						completed = completed + 1
+						if completed == total and on_done then
+							on_done()
+						end
+					end
+				end)
+			end)
+		end
+	end
+end
+
+-------------------------------------------------
 -- Ensure install directory exists
 -------------------------------------------------
 function M.ensure_install_dir()
