@@ -152,20 +152,21 @@ function M.install(plugin, on_done)
 		plugin.repo,
 		path,
 	}
-
 	utils.run_async(cmd, function(success, result)
-		if success then
-			M.installed[plugin.name] = true
-			M.save()
+		vim.schedule(function()
+			if success then
+				M.installed[plugin.name] = true
+				M.save()
 
-			if on_done then
-				on_done(true, "Installed successfully")
+				if on_done then
+					on_done(true, "Installed successfully")
+				end
+			else
+				if on_done then
+					on_done(false, result)
+				end
 			end
-		else
-			if on_done then
-				on_done(false, result)
-			end
-		end
+		end)
 	end)
 end
 -------------------------------------------------
