@@ -92,7 +92,6 @@ end
 function M.render_preview(bufnr, plugin, message)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 
-	-- If nothing selected, clear preview
 	if not plugin then
 		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, {})
 		vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
@@ -104,6 +103,9 @@ function M.render_preview(bufnr, plugin, message)
 	local lines = {
 		"Plugin: " .. plugin.name,
 		"",
+		"Author: " .. (plugin.author or "Unknown"),
+		"Stars: " .. tostring(plugin.stars or 0),
+		"",
 		"Description:",
 		plugin.desc,
 		"",
@@ -114,7 +116,6 @@ function M.render_preview(bufnr, plugin, message)
 		state.get_plugin_path(plugin),
 	}
 
-	-- Add status message if provided
 	if message then
 		table.insert(lines, "")
 		table.insert(lines, "Status:")
