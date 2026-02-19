@@ -58,6 +58,28 @@ function M.load()
 end
 
 -------------------------------------------------
+-- Synchronize installed state from filesystem
+-------------------------------------------------
+function M.sync_installed_from_filesystem()
+	M.ensure_install_dir()
+
+	local dirs = vim.fn.readdir(M.install_path)
+
+	-- Reset installed table
+	M.installed = {}
+
+	for _, dir in ipairs(dirs) do
+		local full_path = M.install_path .. "/" .. dir
+
+		if vim.fn.isdirectory(full_path) == 1 then
+			M.installed[dir] = true
+		end
+	end
+
+	M.save()
+end
+
+-------------------------------------------------
 -- Filter items based on search
 -------------------------------------------------
 function M.filter(items)

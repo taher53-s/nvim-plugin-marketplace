@@ -16,6 +16,7 @@ function M.setup(opts)
 	M.config = vim.tbl_extend("force", M.config, opts or {})
 
 	state.load()
+	state.sync_installed_from_filesystem()
 	state.load_installed_plugins()
 end
 
