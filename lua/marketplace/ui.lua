@@ -126,11 +126,15 @@ function M.render_preview(bufnr, plugin, message)
 	-- Add placeholder for lockfile status
 	table.insert(lines, "")
 	table.insert(lines, "Lockfile Status:")
+
+	local lock_status_line = #lines + 1
 	table.insert(lines, "Checking...")
 
 	-- Add health check
 	table.insert(lines, "")
 	table.insert(lines, "Health:")
+
+	local health_status_line = #lines + 1
 	table.insert(lines, "Checking...")
 
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
@@ -142,8 +146,7 @@ function M.render_preview(bufnr, plugin, message)
 			if vim.api.nvim_buf_is_valid(bufnr) then
 				vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 
-				local line_count = vim.api.nvim_buf_line_count(bufnr)
-				vim.api.nvim_buf_set_lines(bufnr, line_count - 1, line_count, false, { status })
+				vim.api.nvim_buf_set_lines(bufnr, health_status_line - 1, health_status_line, false, { status })
 
 				vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 			end
@@ -156,9 +159,7 @@ function M.render_preview(bufnr, plugin, message)
 			if vim.api.nvim_buf_is_valid(bufnr) then
 				vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 
-				-- Replace the last line ("Checking...")
-				local line_count = vim.api.nvim_buf_line_count(bufnr)
-				vim.api.nvim_buf_set_lines(bufnr, line_count - 1, line_count, false, { status })
+				vim.api.nvim_buf_set_lines(bufnr, lock_status_line - 1, lock_status_line, false, { status })
 
 				vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 			end
