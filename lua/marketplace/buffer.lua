@@ -154,8 +154,24 @@ function M.render(bufnr, all_items, on_select)
 		for i, item in ipairs(items) do
 			local label = i .. ". " .. item.name
 
-			if state.is_installed(item) then
-				label = label .. "   [Installed]"
+			-- Installing state
+			if state.installing[item.name] then
+				label = label .. "   ⏳ Installing"
+
+			-- Installed state
+			elseif state.is_installed(item) then
+				label = label .. "   ✅ Installed"
+
+				-- Drift check (async, updates later)
+				state.check_drift(item, function(status)
+					if status == "Outdated" then
+						vim.schedule(function()
+							M.render(bufnr, all_items, on_select)
+						end)
+					end
+				end)
+			else
+				label = label .. "   ❌ Not installed"
 			end
 
 			table.insert(lines, label)
@@ -175,6 +191,14 @@ function M.render(bufnr, all_items, on_select)
 
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
+	-------------------------------------------------
+	-- Highlight installed plugins
+	-------------------------------------------------
+	for i, item in ipairs(items) do
+		if state.is_installed(item) then
+			vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceInstalled", LIST_START_LINE + i - 1, 0, -1)
+		end
+	end
 
 	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceTitle", 0, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceFooter", #lines - 1, 0, -1)

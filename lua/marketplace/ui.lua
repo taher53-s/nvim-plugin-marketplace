@@ -71,6 +71,9 @@ function M.open(config)
 	vim.api.nvim_set_hl(0, "MarketplaceFooter", {
 		fg = "#777777",
 	})
+	vim.api.nvim_set_hl(0, "MarketplaceInstalled", {
+		fg = "#6ab04c",
+	})
 
 	-----------------------------------------------------------------
 	-- Render list
