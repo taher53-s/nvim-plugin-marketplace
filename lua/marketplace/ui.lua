@@ -90,6 +90,8 @@ end
 
 -- Render preview panel
 function M.render_preview(bufnr, plugin, message)
+	local state = require("marketplace.state")
+
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 
 	if not plugin then
@@ -97,8 +99,6 @@ function M.render_preview(bufnr, plugin, message)
 		vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 		return
 	end
-
-	local state = require("marketplace.state")
 
 	local lines = {
 		"Plugin: " .. plugin.name,
@@ -116,14 +116,35 @@ function M.render_preview(bufnr, plugin, message)
 		state.get_plugin_path(plugin),
 	}
 
+	-- Optional status message (install/update feedback)
 	if message then
 		table.insert(lines, "")
 		table.insert(lines, "Status:")
 		table.insert(lines, message)
 	end
 
+	-- Add placeholder for lockfile status
+	table.insert(lines, "")
+	table.insert(lines, "Lockfile Status:")
+	table.insert(lines, "Checking...")
+
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
+
+	-- Async drift check
+	state.check_drift(plugin, function(status)
+		vim.schedule(function()
+			if vim.api.nvim_buf_is_valid(bufnr) then
+				vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
+
+				-- Replace the last line ("Checking...")
+				local line_count = vim.api.nvim_buf_line_count(bufnr)
+				vim.api.nvim_buf_set_lines(bufnr, line_count - 1, line_count, false, { status })
+
+				vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
+			end
+		end)
+	end)
 end
 
 return M

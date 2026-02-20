@@ -45,6 +45,61 @@ function M.load_lockfile()
 end
 
 -------------------------------------------------
+-- Get current installed commit hash
+-------------------------------------------------
+function M.get_current_commit(plugin, callback)
+	local path = M.get_plugin_path(plugin)
+
+	if vim.fn.isdirectory(path) ~= 1 then
+		callback(nil)
+		return
+	end
+
+	local cmd = {
+		"git",
+		"-C",
+		path,
+		"rev-parse",
+		"HEAD",
+	}
+
+	utils.run_async(cmd, function(success, output)
+		vim.schedule(function()
+			if success then
+				callback(vim.trim(output))
+			else
+				callback(nil)
+			end
+		end)
+	end)
+end
+
+-------------------------------------------------
+-- Check if plugin is out of sync with lockfile
+-------------------------------------------------
+function M.check_drift(plugin, callback)
+	local locked_commit = M.lock[plugin.name]
+
+	if not locked_commit then
+		callback("Untracked")
+		return
+	end
+
+	M.get_current_commit(plugin, function(current_commit)
+		if not current_commit then
+			callback("Missing")
+			return
+		end
+
+		if current_commit == locked_commit then
+			callback("Up to date")
+		else
+			callback("Outdated")
+		end
+	end)
+end
+
+-------------------------------------------------
 -- Restore all plugins from lockfile
 -------------------------------------------------
 function M.restore_from_lockfile(on_done)
