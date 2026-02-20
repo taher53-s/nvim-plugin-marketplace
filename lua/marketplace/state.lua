@@ -412,17 +412,18 @@ function M.uninstall(plugin)
 end
 
 -------------------------------------------------
--- Update plugin (git pull)
+-- Update plugin (async git pull)
 -------------------------------------------------
-function M.update(plugin)
+function M.update(plugin, on_done)
+	local name = plugin.name
 	local path = M.get_plugin_path(plugin)
 
 	if vim.fn.isdirectory(path) ~= 1 then
-		print(plugin.name .. " is not installed")
-		return false, "Plugin not installed"
+		if on_done then
+			on_done(false, "Plugin not installed")
+		end
+		return
 	end
-
-	print("Updating " .. plugin.name .. "...")
 
 	local cmd = {
 		"git",
@@ -431,16 +432,19 @@ function M.update(plugin)
 		"pull",
 	}
 
-	local success, result = utils.run(cmd)
-
-	if success then
-		print("Updated " .. plugin.name)
-		return true, "Update successful"
-	else
-		print("Update failed:")
-		print(result)
-		return false, result
-	end
+	utils.run_async(cmd, function(success, _)
+		vim.schedule(function()
+			if success then
+				if on_done then
+					on_done(true, "Updated successfully")
+				end
+			else
+				if on_done then
+					on_done(false, "Update failed")
+				end
+			end
+		end)
+	end)
 end
 
 -------------------------------------------------
