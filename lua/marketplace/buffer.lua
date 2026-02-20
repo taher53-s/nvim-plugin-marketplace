@@ -42,71 +42,64 @@ local function set_keymaps(bufnr, all_items, on_select)
 
 	-- Install
 	vim.keymap.set("n", "i", function()
-		local items = state.filter(all_items)
-		local plugin = items[state.current_index]
-
-		if plugin then
-			on_select(plugin, "Installing...")
-
-			state.install(plugin, function(success, message)
-				if success then
-					on_select(plugin, message)
-				else
-					on_select(plugin, "Install failed")
-				end
-				M.render(bufnr, all_items, on_select)
-			end)
+		local filtered = state.filter(all_items)
+		local plugin = filtered[state.current_index]
+		if not plugin then
+			return
 		end
+
+		state.install(plugin, function()
+			M.render(bufnr, all_items, on_select)
+		end)
+
+		M.render(bufnr, all_items, on_select)
 	end, { buffer = bufnr })
 
 	-- Uninstall
 	vim.keymap.set("n", "u", function()
 		local items = state.filter(all_items)
 		local plugin = items[state.current_index]
-
-		if plugin then
-			on_select(plugin, "Uninstalling...")
-			state.uninstall(plugin)
-			on_select(plugin, "Uninstalled successfully")
-			M.render(bufnr, all_items, on_select)
+		if not plugin then
+			return
 		end
+
+		on_select(plugin, "Uninstalling...")
+		state.uninstall(plugin)
+		on_select(plugin, "Uninstalled successfully")
+		M.render(bufnr, all_items, on_select)
 	end, { buffer = bufnr })
 
 	-- Update
 	vim.keymap.set("n", "U", function()
 		local items = state.filter(all_items)
 		local plugin = items[state.current_index]
+		if not plugin then
+			return
+		end
 
-		if plugin then
-			if not state.is_installed(plugin) then
-				on_select(plugin, "Plugin is not installed")
-				return
-			end
+		if not state.is_installed(plugin) then
+			on_select(plugin, "Plugin is not installed")
+			return
+		end
 
-			on_select(plugin, "Updating...")
+		on_select(plugin, "Updating...")
+		local ok, message = state.update(plugin)
 
-			local ok, message = state.update(plugin)
-
-			if ok then
-				on_select(plugin, message)
-			else
-				on_select(plugin, "Update failed")
-			end
+		if ok then
+			on_select(plugin, message)
+		else
+			on_select(plugin, "Update failed")
 		end
 	end, { buffer = bufnr })
 
-	-------------------------------------------------------------------
-	-- Update all plugins
-	-------------------------------------------------------------------
+	-- Update all
 	vim.keymap.set("n", "A", function()
-		state.update_all(function(message)
+		state.update_all(function()
 			M.render(bufnr, all_items, on_select)
 		end)
 	end, { buffer = bufnr })
 
-	-------------------------------------------------------------------
-	-- Restore from lockfile
-	-------------------------------------------------------------------
+	-- Restore
 	vim.keymap.set("n", "R", function()
 		state.restore_from_lockfile(function()
 			M.render(bufnr, all_items, on_select)
@@ -143,6 +136,9 @@ function M.render(bufnr, all_items, on_select)
 	vim.api.nvim_buf_set_option(bufnr, "bufhidden", "wipe")
 	vim.api.nvim_buf_set_option(bufnr, "swapfile", false)
 
+	-- Clear ALL highlights before rebuilding
+	vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+
 	local lines = {}
 
 	table.insert(lines, "🛒 Plugin Marketplace")
@@ -154,19 +150,18 @@ function M.render(bufnr, all_items, on_select)
 		for i, item in ipairs(items) do
 			local label = i .. ". " .. item.name
 
-			-- Installing state
 			if state.installing[item.name] then
 				label = label .. "   ⏳ Installing"
-
-			-- Installed state
 			elseif state.is_installed(item) then
 				label = label .. "   ✅ Installed"
 
-				-- Drift check (async, updates later)
+				-- Drift check (safe scheduled refresh)
 				state.check_drift(item, function(status)
 					if status == "Outdated" then
 						vim.schedule(function()
-							M.render(bufnr, all_items, on_select)
+							if vim.api.nvim_buf_is_valid(bufnr) then
+								M.render(bufnr, all_items, on_select)
+							end
 						end)
 					end
 				end)
@@ -191,24 +186,19 @@ function M.render(bufnr, all_items, on_select)
 
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
-	-------------------------------------------------
-	-- Highlight installed plugins
-	-------------------------------------------------
-	for i, item in ipairs(items) do
-		if state.is_installed(item) then
-			vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceInstalled", LIST_START_LINE + i - 1, 0, -1)
-		end
-	end
 
+	-- Highlight title and footer
 	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceTitle", 0, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceFooter", #lines - 1, 0, -1)
 
+	-- Empty state handling
 	if #items == 0 then
 		state.current_index = 0
 		on_select(nil)
 		return
 	end
 
+	-- Clamp selection safely
 	if state.current_index < 1 then
 		state.current_index = 1
 	elseif state.current_index > #items then
@@ -248,8 +238,6 @@ end
 -- Highlight selection
 ---------------------------------------------------------------------
 function M.highlight(bufnr)
-	vim.api.nvim_buf_clear_namespace(bufnr, ns, LIST_START_LINE - 1, -1)
-
 	if state.current_index == 0 then
 		return
 	end
