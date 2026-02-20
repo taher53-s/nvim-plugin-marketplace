@@ -2,6 +2,7 @@ local M = {}
 
 local git = require("marketplace.git")
 local data = require("marketplace.data")
+local logger = require("marketplace.logger")
 
 -------------------------------------------------
 -- Paths
@@ -168,21 +169,26 @@ function M.install(plugin, on_done)
 	local name = plugin.name
 	local path = M.get_plugin_path(plugin)
 
+	-- Prevent duplicate install
 	if M.installing[name] then
 		if on_done then
 			on_done(false, "Install already in progress")
 		end
+		logger.warn("Install already in progress for " .. name)
 		return
 	end
 
+	-- Already installed
 	if vim.fn.isdirectory(path) == 1 then
 		if on_done then
 			on_done(true, "Already installed")
 		end
+		logger.info(name .. " already installed")
 		return
 	end
 
 	M.installing[name] = true
+	logger.info("Installing " .. name .. "...")
 
 	git.clone(plugin.repo, path, function(success)
 		M.installing[name] = nil
@@ -199,10 +205,14 @@ function M.install(plugin, on_done)
 				end
 			end)
 
+			logger.info("Installed " .. name)
+
 			if on_done then
 				on_done(true, "Installed successfully")
 			end
 		else
+			logger.error("Install failed for " .. name)
+
 			if on_done then
 				on_done(false, "Install failed")
 			end
@@ -214,14 +224,18 @@ end
 -- Uninstall plugin
 -------------------------------------------------
 function M.uninstall(plugin)
+	local name = plugin.name
 	local path = M.get_plugin_path(plugin)
 
 	if vim.fn.isdirectory(path) == 1 then
 		vim.fn.delete(path, "rf")
+		logger.info("Uninstalled " .. name)
+	else
+		logger.warn("Tried to uninstall non-existing plugin: " .. name)
 	end
 
-	M.installed[plugin.name] = nil
-	M.lock[plugin.name] = nil
+	M.installed[name] = nil
+	M.lock[name] = nil
 
 	M.save()
 	M.save_lockfile()
@@ -231,20 +245,31 @@ end
 -- Update plugin
 -------------------------------------------------
 function M.update(plugin, on_done)
+	local name = plugin.name
 	local path = M.get_plugin_path(plugin)
 
 	if vim.fn.isdirectory(path) ~= 1 then
+		logger.warn("Update skipped, plugin not installed: " .. name)
+
 		if on_done then
 			on_done(false, "Plugin not installed")
 		end
 		return
 	end
 
+	logger.info("Updating " .. name .. "...")
+
 	git.pull(path, function(success)
-		if on_done then
-			if success then
+		if success then
+			logger.info("Updated " .. name)
+
+			if on_done then
 				on_done(true, "Updated successfully")
-			else
+			end
+		else
+			logger.error("Update failed for " .. name)
+
+			if on_done then
 				on_done(false, "Update failed")
 			end
 		end
@@ -258,34 +283,43 @@ function M.update_all(on_done)
 	local total = 0
 	local completed = 0
 
-	for name, installed in pairs(M.installed) do
+	for _, installed in pairs(M.installed) do
 		if installed then
 			total = total + 1
 		end
 	end
 
 	if total == 0 then
+		logger.info("No plugins installed to update")
+
 		if on_done then
 			on_done("No plugins installed")
 		end
 		return
 	end
 
+	logger.info("Updating all plugins...")
+
 	for name, installed in pairs(M.installed) do
 		if installed then
 			local plugin = M.find_plugin_by_name(name)
+
 			if plugin then
 				M.update(plugin, function()
 					completed = completed + 1
-					if completed == total and on_done then
-						on_done("All plugins updated")
+
+					if completed == total then
+						logger.info("All plugins updated")
+
+						if on_done then
+							on_done("All plugins updated")
+						end
 					end
 				end)
 			end
 		end
 	end
 end
-
 -------------------------------------------------
 -- Restore from lockfile
 -------------------------------------------------
@@ -298,39 +332,80 @@ function M.restore_from_lockfile(on_done)
 	for _ in pairs(M.lock) do
 		total = total + 1
 	end
+
 	if total == 0 then
+		logger.info("Lockfile empty, nothing to restore")
+
 		if on_done then
 			on_done()
 		end
 		return
 	end
 
+	logger.info("Restoring plugins from lockfile...")
+
 	for name, commit in pairs(M.lock) do
 		local plugin = M.find_plugin_by_name(name)
-		if plugin then
-			local path = M.get_plugin_path(plugin)
+
+		if not plugin then
+			logger.warn("Plugin definition not found for: " .. name)
+
+			completed = completed + 1
+			if completed == total and on_done then
+				logger.info("Restore completed")
+				on_done()
+			end
+			goto continue
+		end
+
+		local path = M.get_plugin_path(plugin)
+
+		-- If already installed, skip clone but checkout commit
+		local function finalize()
+			M.installed[name] = true
+			M.save()
+
+			completed = completed + 1
+			if completed == total then
+				logger.info("Restore completed")
+				if on_done then
+					on_done()
+				end
+			end
+		end
+
+		local function checkout_commit()
+			vim.system({ "git", "-C", path, "checkout", commit }, {}, function()
+				vim.schedule(function()
+					finalize()
+				end)
+			end)
+		end
+
+		if vim.fn.isdirectory(path) == 1 then
+			logger.info("Restoring existing plugin: " .. name)
+			checkout_commit()
+		else
+			logger.info("Cloning " .. name .. " for restore")
 
 			git.clone(plugin.repo, path, function(success)
 				if success then
-					vim.system({ "git", "-C", path, "checkout", commit }, {}, function()
-						vim.schedule(function()
-							M.installed[name] = true
-							M.save()
-
-							completed = completed + 1
-							if completed == total and on_done then
-								on_done()
-							end
-						end)
-					end)
+					checkout_commit()
 				else
+					logger.error("Failed to clone during restore: " .. name)
+
 					completed = completed + 1
+					if completed == total and on_done then
+						logger.info("Restore completed")
+						on_done()
+					end
 				end
 			end)
 		end
+
+		::continue::
 	end
 end
-
 -------------------------------------------------
 -- Drift detection
 -------------------------------------------------
@@ -346,6 +421,7 @@ function M.check_drift(plugin, callback)
 
 	git.get_commit(path, function(success, current)
 		if not success then
+			logger.warn("Drift check failed for " .. plugin.name)
 			callback("Missing")
 			return
 		end
@@ -353,6 +429,7 @@ function M.check_drift(plugin, callback)
 		if current == locked then
 			callback("Up to date")
 		else
+			logger.info("Plugin outdated: " .. plugin.name)
 			callback("Outdated")
 		end
 	end)
@@ -365,22 +442,26 @@ function M.health_check(plugin, callback)
 	local path = M.get_plugin_path(plugin)
 
 	if vim.fn.isdirectory(path) ~= 1 then
+		logger.warn("Health check: missing plugin " .. plugin.name)
 		callback("Missing (not installed)")
 		return
 	end
 
 	if vim.fn.isdirectory(path .. "/.git") ~= 1 then
+		logger.error("Health check: corrupted repo " .. plugin.name)
 		callback("Corrupted (no .git directory)")
 		return
 	end
 
 	git.get_branch(path, function(success, branch)
 		if not success then
+			logger.error("Health check git error for " .. plugin.name)
 			callback("Git error")
 			return
 		end
 
 		if branch == "HEAD" then
+			logger.warn("Health check: detached HEAD for " .. plugin.name)
 			callback("Detached HEAD")
 		else
 			callback("Healthy (" .. branch .. ")")
