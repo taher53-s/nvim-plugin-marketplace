@@ -96,6 +96,15 @@ local function set_keymaps(bufnr, all_items, on_select)
 	end, { buffer = bufnr })
 
 	-------------------------------------------------------------------
+	-- Update all plugins
+	-------------------------------------------------------------------
+	vim.keymap.set("n", "A", function()
+		state.update_all(function(message)
+			M.render(bufnr, all_items, on_select)
+		end)
+	end, { buffer = bufnr })
+
+	-------------------------------------------------------------------
 	-- Restore from lockfile
 	-------------------------------------------------------------------
 	vim.keymap.set("n", "R", function()
@@ -158,7 +167,10 @@ function M.render(bufnr, all_items, on_select)
 	if state.query ~= "" then
 		table.insert(lines, "Search: " .. state.query .. "   (Esc to clear)")
 	else
-		table.insert(lines, "j/k: move   i: install   u: uninstall   U: update   R: restore   /: search   q: quit")
+		table.insert(
+			lines,
+			"j/k: move   i: install   u: uninstall   U: update   A: update all   R: restore   /: search   q: quit"
+		)
 	end
 
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)

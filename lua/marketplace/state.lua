@@ -444,6 +444,43 @@ function M.update(plugin)
 end
 
 -------------------------------------------------
+-- Update all installed plugins
+-------------------------------------------------
+function M.update_all(on_done)
+	local total = 0
+	local completed = 0
+
+	for name, installed in pairs(M.installed) do
+		if installed then
+			total = total + 1
+		end
+	end
+
+	if total == 0 then
+		if on_done then
+			on_done("No plugins installed")
+		end
+		return
+	end
+
+	for name, installed in pairs(M.installed) do
+		if installed then
+			local plugin = M.find_plugin_by_name(name)
+			if plugin then
+				M.update(plugin, function(_, _)
+					completed = completed + 1
+					if completed == total and on_done then
+						on_done("All plugins updated")
+					end
+				end)
+			else
+				completed = completed + 1
+			end
+		end
+	end
+end
+
+-------------------------------------------------
 -- Check if plugin is installed (filesystem truth)
 -------------------------------------------------
 function M.is_installed(plugin)
