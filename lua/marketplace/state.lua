@@ -14,6 +14,52 @@ local data_path = vim.fn.stdpath("data") .. "/marketplace.json"
 M.install_path = vim.fn.stdpath("data") .. "/marketplace_plugins"
 
 -------------------------------------------------
+-- Plugin health check
+-------------------------------------------------
+function M.health_check(plugin, callback)
+	local path = M.get_plugin_path(plugin)
+
+	-- Missing directory
+	if vim.fn.isdirectory(path) ~= 1 then
+		callback("Missing (not installed)")
+		return
+	end
+
+	-- Not a git repo
+	if vim.fn.isdirectory(path .. "/.git") ~= 1 then
+		callback("Corrupted (no .git directory)")
+		return
+	end
+
+	-- Check HEAD status
+	local cmd = {
+		"git",
+		"-C",
+		path,
+		"rev-parse",
+		"--abbrev-ref",
+		"HEAD",
+	}
+
+	utils.run_async(cmd, function(success, output)
+		vim.schedule(function()
+			if not success then
+				callback("Git error")
+				return
+			end
+
+			local branch = vim.trim(output)
+
+			if branch == "HEAD" then
+				callback("Detached HEAD")
+			else
+				callback("Healthy (" .. branch .. ")")
+			end
+		end)
+	end)
+end
+
+-------------------------------------------------
 -- Save lockfile (plugin commit hashes)
 -------------------------------------------------
 function M.save_lockfile()

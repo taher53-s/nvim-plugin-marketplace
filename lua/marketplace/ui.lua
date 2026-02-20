@@ -128,8 +128,27 @@ function M.render_preview(bufnr, plugin, message)
 	table.insert(lines, "Lockfile Status:")
 	table.insert(lines, "Checking...")
 
+	-- Add health check
+	table.insert(lines, "")
+	table.insert(lines, "Health:")
+	table.insert(lines, "Checking...")
+
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
+
+	--Async health check
+	state.health_check(plugin, function(status)
+		vim.schedule(function()
+			if vim.api.nvim_buf_is_valid(bufnr) then
+				vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
+
+				local line_count = vim.api.nvim_buf_line_count(bufnr)
+				vim.api.nvim_buf_set_lines(bufnr, line_count - 1, line_count, false, { status })
+
+				vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
+			end
+		end)
+	end)
 
 	-- Async drift check
 	state.check_drift(plugin, function(status)
