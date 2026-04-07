@@ -27,6 +27,34 @@ M.installing = {}
 M.drift_cache = {}
 
 -------------------------------------------------
+-- Post-install hooks registry
+-------------------------------------------------
+M.hooks = {
+	after_install = {},
+	after_uninstall = {},
+}
+
+function M.register_hook(event, name, fn)
+	if M.hooks[event] then
+		M.hooks[event][name] = fn
+	end
+end
+
+function M.unregister_hook(event, name)
+	if M.hooks[event] then
+		M.hooks[event][name] = nil
+	end
+end
+
+function M.run_hooks(event, ...)
+	if M.hooks[event] then
+		for _, fn in pairs(M.hooks[event]) do
+			fn(...)
+		end
+	end
+end
+
+-------------------------------------------------
 -- Ensure install directory exists
 -------------------------------------------------
 function M.ensure_install_dir()
@@ -312,6 +340,7 @@ function M.install(plugin, on_done)
 			end)
 
 			logger.info("Installed " .. name)
+			M.run_hooks("after_install", plugin)
 
 			if on_done then
 				on_done(true, "Installed successfully")
@@ -414,6 +443,7 @@ function M.uninstall(plugin)
 	if vim.fn.isdirectory(path) == 1 then
 		vim.fn.delete(path, "rf")
 		logger.info("Uninstalled " .. name)
+		M.run_hooks("after_uninstall", plugin)
 	else
 		logger.warn("Tried to uninstall non-existing plugin: " .. name)
 	end
