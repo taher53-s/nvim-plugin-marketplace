@@ -78,6 +78,32 @@ function M.open(config)
 		fg = "#6ab04c",
 	})
 
+	vim.api.nvim_set_hl(0, "MarketplaceSection", {
+		fg = "#58a6ff",
+		bold = true,
+	})
+
+	vim.api.nvim_set_hl(0, "MarketplaceMeta", {
+		fg = "#8b949e",
+	})
+
+	vim.api.nvim_set_hl(0, "MarketplaceCategory", {
+		fg = "#d2a8ff",
+	})
+
+	vim.api.nvim_set_hl(0, "MarketplaceDrift", {
+		fg = "#f0c06a",
+	})
+
+	-----------------------------------------------------------------
+	-- Background drift check on open (populates cache for all installed)
+	-----------------------------------------------------------------
+	for _, plugin in ipairs(data.plugins) do
+		if state.is_installed(plugin) then
+			state.check_drift_cached(plugin, function() end)
+		end
+	end
+
 	-----------------------------------------------------------------
 	-- Render list
 	-----------------------------------------------------------------
@@ -94,7 +120,7 @@ function M.open(config)
 	vim.cmd("stopinsert")
 end
 
--- Render preview panel
+-- Render preview panel with enhanced layout
 function M.render_preview(bufnr, plugin, message)
 	local state = require("marketplace.state")
 
@@ -106,67 +132,83 @@ function M.render_preview(bufnr, plugin, message)
 		return
 	end
 
+	-- Format star count with thousands separator
+	local stars = plugin.stars or 0
+	local stars_str = string.format("%,d", stars)
+
 	local lines = {
-		"Plugin: " .. plugin.name,
+		"◆ " .. plugin.name,
 		"",
-		"Author: " .. (plugin.author or "Unknown"),
-		"Stars: " .. tostring(plugin.stars or 0),
-		"",
-		"Description:",
-		plugin.desc,
-		"",
-		"Repository:",
-		plugin.repo,
-		"",
-		"Install Path:",
-		state.get_plugin_path(plugin),
 	}
 
-	-- Optional status message (install/update feedback)
-	if message then
+	-- Metadata section
+	if plugin.category then
+		table.insert(lines, "  Category    " .. plugin.category)
+	end
+	if plugin.author then
+		table.insert(lines, "  Author      " .. plugin.author)
+	end
+	table.insert(lines, "  Stars       " .. stars_str)
+	table.insert(lines, "  Repository  " .. plugin.repo)
+	table.insert(lines, "")
+	table.insert(lines, "  Description")
+	table.insert(lines, "  " .. plugin.desc)
+
+	-- Dependencies
+	if plugin.dependencies and #plugin.dependencies > 0 then
 		table.insert(lines, "")
-		table.insert(lines, "Status:")
-		table.insert(lines, message)
+		table.insert(lines, "  Dependencies")
+		for _, dep in ipairs(plugin.dependencies) do
+			local dep_installed = state.is_installed({ name = dep }) and "✅" or "❌"
+			table.insert(lines, "    " .. dep_installed .. " " .. dep)
+		end
 	end
 
-	-- Add placeholder for lockfile status
+	-- Installation path
 	table.insert(lines, "")
-	table.insert(lines, "Lockfile Status:")
+	table.insert(lines, "  Install Path")
+	table.insert(lines, "  " .. state.get_plugin_path(plugin))
 
+	-- Optional status message
+	if message then
+		table.insert(lines, "")
+		table.insert(lines, "  Status")
+		table.insert(lines, "  " .. message)
+	end
+
+	-- Lockfile / drift status
 	local lock_status_line = #lines + 1
-	table.insert(lines, "Checking...")
+	table.insert(lines, "  Lockfile")
+	table.insert(lines, "  Checking...")
 
-	-- Add health check
-	table.insert(lines, "")
-	table.insert(lines, "Health:")
-
+	-- Health status
 	local health_status_line = #lines + 1
-	table.insert(lines, "Checking...")
+	table.insert(lines, "  Health")
+	table.insert(lines, "  Checking...")
 
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 
-	--Async health check
+	-- Apply highlights
+	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceTitle", 0, 0, -1)
+
+	-- Async health check
 	state.health_check(plugin, function(status)
 		vim.schedule(function()
 			if vim.api.nvim_buf_is_valid(bufnr) then
 				vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
-
-				vim.api.nvim_buf_set_lines(bufnr, health_status_line - 1, health_status_line, false, { status })
-
+				vim.api.nvim_buf_set_lines(bufnr, health_status_line - 1, health_status_line, false, { "  " .. status })
 				vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 			end
 		end)
 	end)
 
-	-- Async drift check
-	state.check_drift(plugin, function(status)
+	-- Async drift check (cached)
+	state.check_drift_cached(plugin, function(status)
 		vim.schedule(function()
 			if vim.api.nvim_buf_is_valid(bufnr) then
 				vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
-
-				vim.api.nvim_buf_set_lines(bufnr, lock_status_line - 1, lock_status_line, false, { status })
-
+				vim.api.nvim_buf_set_lines(bufnr, lock_status_line - 1, lock_status_line, false, { "  " .. status })
 				vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 			end
 		end)
