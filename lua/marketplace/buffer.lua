@@ -153,11 +153,18 @@ function M.render(bufnr, all_items, on_select)
 			if state.installing[item.name] then
 				label = label .. "   ⏳ Installing"
 			elseif state.is_installed(item) then
-				label = label .. "   ✅ Installed"
+				local drift_status = state.drift_cache[item.name]
+				if drift_status == "Outdated" then
+					label = label .. "   ✅ Installed ⬆ Outdated"
+				elseif drift_status == "Untracked" then
+					label = label .. "   ✅ Installed ⚠ Untracked"
+				else
+					label = label .. "   ✅ Installed"
+				end
 
-				-- Drift check (safe scheduled refresh)
-				state.check_drift(item, function(status)
-					if status == "Outdated" then
+				-- Background drift check (async, updates cache)
+				state.check_drift_cached(item, function(status)
+					if status ~= drift_status and status then
 						vim.schedule(function()
 							if vim.api.nvim_buf_is_valid(bufnr) then
 								M.render(bufnr, all_items, on_select)

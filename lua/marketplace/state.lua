@@ -21,6 +21,7 @@ M.query = ""
 M.installed = {}
 M.lock = {}
 M.installing = {}
+M.drift_cache = {}
 
 -------------------------------------------------
 -- Ensure install directory exists
@@ -406,6 +407,29 @@ function M.restore_from_lockfile(on_done)
 		::continue::
 	end
 end
+-------------------------------------------------
+-- Clear drift cache (call on fresh open)
+-------------------------------------------------
+function M.clear_drift_cache()
+	M.drift_cache = {}
+end
+
+-------------------------------------------------
+-- Check drift with caching
+-------------------------------------------------
+function M.check_drift_cached(plugin, callback)
+	local cached = M.drift_cache[plugin.name]
+	if cached then
+		callback(cached)
+		return
+	end
+
+	M.check_drift(plugin, function(status)
+		M.drift_cache[plugin.name] = status
+		callback(status)
+	end)
+end
+
 -------------------------------------------------
 -- Drift detection
 -------------------------------------------------

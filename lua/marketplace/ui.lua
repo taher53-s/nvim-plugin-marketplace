@@ -6,8 +6,11 @@ local buffer = require("marketplace.buffer")
 local data = require("marketplace.data")
 local state = require("marketplace.state")
 
+local ns = vim.api.nvim_create_namespace("marketplace")
+
 function M.open(config)
 	state.load()
+	state.clear_drift_cache()
 	-- LEFT WINDOW (list)
 	local list_buf = vim.api.nvim_create_buf(false, true)
 
