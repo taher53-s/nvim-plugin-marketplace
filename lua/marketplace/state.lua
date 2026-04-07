@@ -11,6 +11,7 @@ local data_path = vim.fn.stdpath("data") .. "/marketplace.json"
 local lockfile_path = vim.fn.stdpath("data") .. "/marketplace-lock.json"
 local drift_cache_path = vim.fn.stdpath("data") .. "/marketplace-drift-cache.json"
 local filter_path = vim.fn.stdpath("data") .. "/marketplace-filters.json"
+local metadata_cache_path = vim.fn.stdpath("data") .. "/marketplace-metadata-cache.json"
 
 M.install_path = vim.fn.stdpath("data") .. "/marketplace_plugins"
 
@@ -26,6 +27,7 @@ M.lock = {}
 M.installing = {}
 M.drift_cache = {}
 M.disabled = {}  -- Track disabled plugins
+M.metadata_cache = {}  -- Cached plugin metadata (stars, desc, etc.)
 
 -------------------------------------------------
 -- Post-install hooks registry
@@ -203,6 +205,35 @@ function M.load_drift_cache()
 	local ok, decoded = pcall(vim.fn.json_decode, content)
 	if ok and type(decoded) == "table" then
 		M.drift_cache = decoded
+	end
+end
+
+-------------------------------------------------
+-- Persist metadata cache to disk (stars, desc, etc.)
+-------------------------------------------------
+function M.save_metadata_cache()
+	local file = io.open(metadata_cache_path, "w")
+	if file then
+		file:write(vim.fn.json_encode(M.metadata_cache))
+		file:close()
+	end
+end
+
+-------------------------------------------------
+-- Load metadata cache from disk
+-------------------------------------------------
+function M.load_metadata_cache()
+	local file = io.open(metadata_cache_path, "r")
+	if not file then
+		return
+	end
+
+	local content = file:read("*a")
+	file:close()
+
+	local ok, decoded = pcall(vim.fn.json_decode, content)
+	if ok and type(decoded) == "table" then
+		M.metadata_cache = decoded
 	end
 end
 
