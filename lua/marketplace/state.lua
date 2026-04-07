@@ -256,6 +256,17 @@ function M.move(delta, max)
 end
 
 -------------------------------------------------
+-- Build dependency graph from all plugin configs
+-------------------------------------------------
+function M.build_dependency_graph()
+	local graph = {}
+	for name, config in pairs(data.plugin_configs) do
+		graph[name] = config.dependencies or {}
+	end
+	return graph
+end
+
+-------------------------------------------------
 -- Install plugin (async)
 -------------------------------------------------
 function M.install(plugin, on_done)
