@@ -316,6 +316,84 @@ function M.install(plugin, on_done)
 end
 
 -------------------------------------------------
+-- Collect all dependencies for a plugin (recursive, with cycle detection)
+-------------------------------------------------
+function M.collect_dependencies(name, collected, visiting)
+	collected = collected or {}
+	visiting = visiting or {}
+
+	if collected[name] or visiting[name] then
+		return
+	end
+
+	visiting[name] = true
+
+	local config = data.plugin_configs[name]
+	if config and config.dependencies then
+		for _, dep in ipairs(config.dependencies) do
+			M.collect_dependencies(dep, collected, visiting)
+		end
+	end
+
+	collected[name] = true
+	visiting[name] = nil
+end
+
+-------------------------------------------------
+-- Install plugin with all dependencies
+-------------------------------------------------
+function M.install_with_deps(plugin, on_done)
+	local collected = {}
+	M.collect_dependencies(plugin.name, collected)
+
+	-- Remove self, we only want deps
+	collected[plugin.name] = nil
+
+	-- Build ordered list: deps first (sorted by name for determinism)
+	local dep_list = {}
+	for dep_name in pairs(collected) do
+		table.insert(dep_list, dep_name)
+	end
+	table.sort(dep_list)
+
+	local to_install = {}
+	for _, dep_name in ipairs(dep_list) do
+		local dep_plugin = M.find_plugin_by_name(dep_name)
+		if dep_plugin and not M.is_installed(dep_plugin) then
+			table.insert(to_install, dep_plugin)
+		end
+	end
+
+	if #to_install == 0 then
+		-- No deps to install, just install self
+		M.install(plugin, on_done)
+		return
+	end
+
+	local total = #to_install + 1
+	local completed = 0
+
+	local function check_done(success, msg)
+		completed = completed + 1
+		if completed == total and on_done then
+			on_done(success, msg)
+		end
+	end
+
+	-- Install deps first
+	for _, dep in ipairs(to_install) do
+		M.install(dep, function(ok)
+			check_done(true, "Installed with dependencies")
+		end)
+	end
+
+	-- Then install main plugin
+	M.install(plugin, function(ok, msg)
+		check_done(ok, msg or "Installed successfully")
+	end)
+end
+
+-------------------------------------------------
 -- Uninstall plugin
 -------------------------------------------------
 function M.uninstall(plugin)
