@@ -7,6 +7,20 @@ local state = require("marketplace.state")
 
 local ns = vim.api.nvim_create_namespace("marketplace")
 
+-- Debounce helper (avoids redundant re-renders)
+local render_debounce_timer = nil
+local function debounce(fn, delay_ms)
+	return function(...)
+		if render_debounce_timer then
+			vim.fn.timer_stop(render_debounce_timer)
+		end
+		render_debounce_timer = vim.fn.timer_start(delay_ms, function()
+			render_debounce_timer = nil
+			fn(...)
+		end)
+	end
+end
+
 -- Layout:
 -- Line 1: Title
 -- Line 2: Empty spacer

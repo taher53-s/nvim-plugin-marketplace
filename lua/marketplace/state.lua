@@ -117,6 +117,9 @@ function M.load()
 	if ok and type(decoded) == "table" then
 		M.installed = decoded
 	end
+
+	-- Load metadata cache for cached plugin info
+	M.load_metadata_cache()
 end
 
 -------------------------------------------------
@@ -344,8 +347,32 @@ function M.build_dependency_graph()
 end
 
 -------------------------------------------------
--- Install plugin (async)
+-- Async install queue (limit concurrent installs)
 -------------------------------------------------
+local install_queue = {}
+local install_running = 0
+local install_concurrency = 2  -- max concurrent installs
+
+local function process_install_queue()
+	if #install_queue == 0 or install_running >= install_concurrency then
+		return
+	end
+
+	local task = table.remove(install_queue, 1)
+	install_running = install_running + 1
+
+	task.fn(function(...)
+		install_running = install_running - 1
+		if task.cb then task.cb(...) end
+		process_install_queue()
+	end)
+end
+
+function M.enqueue_install(fn, callback)
+	table.insert(install_queue, { fn = fn, cb = callback })
+	process_install_queue()
+end
+
 function M.install(plugin, on_done)
 	M.ensure_install_dir()
 
