@@ -195,6 +195,17 @@ end
 -- Render list
 ---------------------------------------------------------------------
 function M.render(bufnr, all_items, on_select)
+	-- Debounce render to avoid redundant re-renders within 100ms
+	if M._render_timer then
+		vim.fn.timer_stop(M._render_timer)
+	end
+	M._render_timer = vim.fn.timer_start(100, function()
+		M._render_timer = nil
+		_do_render(bufnr, all_items, on_select)
+	end)
+end
+
+local function _do_render(bufnr, all_items, on_select)
 	local items = state.filter(all_items)
 
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
