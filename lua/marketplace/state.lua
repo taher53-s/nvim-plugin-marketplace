@@ -716,10 +716,29 @@ end
 function M.load_installed_plugins()
 	for name, _ in pairs(M.installed) do
 		local path = M.install_path .. "/" .. name
+		local config = data.plugin_configs[name]
 
 		if vim.fn.isdirectory(path) == 1 then
-			if not string.find(vim.o.runtimepath, path, 1, true) then
-				vim.opt.rtp:append(path)
+			if config and config.lazy then
+				-- Lazy load: defer adding to rtp, register event-based autocmd instead
+				local event = config.load_event
+				if event and event.event then
+					vim.api.nvim_create_autocmd(event.event, {
+						pattern = { "*" },
+						once = true,
+						callback = function()
+							if not string.find(vim.o.runtimepath, path, 1, true) then
+								vim.opt.rtp:append(path)
+							end
+						end,
+						desc = "Lazy load " .. name .. " on " .. event.event,
+					})
+				end
+			else
+				-- Immediate load
+				if not string.find(vim.o.runtimepath, path, 1, true) then
+					vim.opt.rtp:append(path)
+				end
 			end
 		end
 	end
