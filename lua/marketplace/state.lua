@@ -17,6 +17,7 @@ M.install_path = vim.fn.stdpath("data") .. "/marketplace_plugins"
 -------------------------------------------------
 M.current_index = 1
 M.query = ""
+M.category_filter = ""
 
 M.installed = {}
 M.lock = {}
@@ -128,18 +129,16 @@ function M.find_plugin_by_name(name)
 end
 
 -------------------------------------------------
--- Filter by search query
+-- Filter by search query and category
 -------------------------------------------------
 function M.filter(items)
-	if M.query == "" then
-		return items
-	end
-
 	local result = {}
-	local q = M.query:lower()
 
 	for _, item in ipairs(items) do
-		if item.name:lower():find(q, 1, true) then
+		local matches_query = M.query == "" or item.name:lower():find(M.query:lower(), 1, true)
+		local matches_category = M.category_filter == "" or item.category == M.category_filter
+
+		if matches_query and matches_category then
 			table.insert(result, item)
 		end
 	end

@@ -122,6 +122,24 @@ local function set_keymaps(bufnr, all_items, on_select)
 		M.render(bufnr, all_items, on_select)
 	end, { buffer = bufnr })
 
+	-- Category filter
+	vim.keymap.set("n", "c", function()
+		local categories = { "All" }
+		for _, cat in ipairs(data.categories) do
+			table.insert(categories, cat)
+		end
+
+		vim.ui.select(categories, { prompt = "Filter by category:" }, function(choice)
+			if choice == "All" then
+				state.category_filter = ""
+			else
+				state.category_filter = choice
+			end
+			state.current_index = 1
+			M.render(bufnr, all_items, on_select)
+		end)
+	end, { buffer = bufnr })
+
 	-- Clear search
 	vim.keymap.set("n", "<Esc>", function()
 		if state.query ~= "" then
@@ -148,7 +166,11 @@ function M.render(bufnr, all_items, on_select)
 
 	local lines = {}
 
-	table.insert(lines, "🛒 Plugin Marketplace")
+	local title = "🛒 Plugin Marketplace"
+	if state.category_filter ~= "" then
+		title = title .. "  |  📂 " .. state.category_filter
+	end
+	table.insert(lines, title)
 	table.insert(lines, "")
 
 	-- Smart update badge: count outdated and untracked plugins
@@ -217,7 +239,7 @@ function M.render(bufnr, all_items, on_select)
 	else
 		table.insert(
 			lines,
-			"j/k: move   i: install   u: uninstall   U: update   A: update all   R: restore   r: refresh   /: search   q: quit"
+			"j/k: move   i: install   u: uninstall   U: update   A: update all   R: restore   r: refresh   c: category   /: search   q: quit"
 		)
 	end
 
