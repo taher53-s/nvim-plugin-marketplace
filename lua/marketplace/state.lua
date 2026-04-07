@@ -729,34 +729,47 @@ function M.health_check(plugin, callback)
 end
 
 -------------------------------------------------
--- Runtimepath loading
+-- Runtimepath loading with priority-based order
 -------------------------------------------------
 function M.load_installed_plugins()
+	-- Collect all installed plugins with their priorities
+	local to_load = {}
 	for name, _ in pairs(M.installed) do
 		local path = M.install_path .. "/" .. name
-		local config = data.plugin_configs[name]
-
 		if vim.fn.isdirectory(path) == 1 then
-			if config and config.lazy then
-				-- Lazy load: defer adding to rtp, register event-based autocmd instead
-				local event = config.load_event
-				if event and event.event then
-					vim.api.nvim_create_autocmd(event.event, {
-						pattern = { "*" },
-						once = true,
-						callback = function()
-							if not string.find(vim.o.runtimepath, path, 1, true) then
-								vim.opt.rtp:append(path)
-							end
-						end,
-						desc = "Lazy load " .. name .. " on " .. event.event,
-					})
-				end
-			else
-				-- Immediate load
-				if not string.find(vim.o.runtimepath, path, 1, true) then
-					vim.opt.rtp:append(path)
-				end
+			local config = data.plugin_configs[name]
+			local priority = config and config.priority or 50
+			table.insert(to_load, { name = name, path = path, config = config, priority = priority })
+		end
+	end
+
+	-- Sort by priority (lower = loaded first)
+	table.sort(to_load, function(a, b)
+		return a.priority < b.priority
+	end)
+
+	-- Load in priority order
+	for _, item in ipairs(to_load) do
+		local config = item.config
+		local path = item.path
+
+		if config and config.lazy then
+			local event = config.load_event
+			if event and event.event then
+				vim.api.nvim_create_autocmd(event.event, {
+					pattern = { "*" },
+					once = true,
+					callback = function()
+						if not string.find(vim.o.runtimepath, path, 1, true) then
+							vim.opt.rtp:append(path)
+						end
+					end,
+					desc = "Lazy load " .. item.name .. " on " .. event.event,
+				})
+			end
+		else
+			if not string.find(vim.o.runtimepath, path, 1, true) then
+				vim.opt.rtp:append(path)
 			end
 		end
 	end
