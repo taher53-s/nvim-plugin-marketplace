@@ -750,7 +750,30 @@ function M.check_drift_cached(plugin, callback)
 end
 
 -------------------------------------------------
--- Drift detection
+-- Cached git commit lookup (avoid repeated rev-parse calls)
+-------------------------------------------------
+local commit_cache = {}
+
+function M.get_cached_commit(path, callback)
+	if commit_cache[path] then
+		callback(true, commit_cache[path])
+		return
+	end
+
+	git.get_commit(path, function(ok, hash)
+		if ok then
+			commit_cache[path] = hash
+		end
+		callback(ok, hash)
+	end)
+end
+
+function M.invalidate_commit_cache(name)
+	commit_cache[M.get_plugin_path({ name = name })] = nil
+end
+
+-------------------------------------------------
+-- Drift detection (optimized: skip git if not a git repo)
 -------------------------------------------------
 function M.check_drift(plugin, callback)
 	local locked = M.lock[plugin.name]
@@ -762,7 +785,20 @@ function M.check_drift(plugin, callback)
 
 	local path = M.get_plugin_path(plugin)
 
-	git.get_commit(path, function(success, current)
+	-- Skip git if dir doesn't exist
+	if vim.fn.isdirectory(path) ~= 1 then
+		callback("Missing")
+		return
+	end
+
+	-- Skip git if not a git repo
+	if vim.fn.isdirectory(path .. "/.git") ~= 1 then
+		callback("Not a git repo")
+		return
+	end
+
+	-- Use cached commit to avoid repeated rev-parse
+	M.get_cached_commit(path, function(success, current)
 		if not success then
 			logger.warn("Drift check failed for " .. plugin.name)
 			callback("Missing")
