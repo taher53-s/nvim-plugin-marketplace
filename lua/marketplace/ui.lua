@@ -10,6 +10,7 @@ local ns = vim.api.nvim_create_namespace("marketplace")
 
 function M.open(config)
 	state.load()
+	state.load_filters()
 	state.clear_drift_cache()
 	-- LEFT WINDOW (list)
 	local list_buf = vim.api.nvim_create_buf(false, true)

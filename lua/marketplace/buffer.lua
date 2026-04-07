@@ -135,6 +135,7 @@ local function set_keymaps(bufnr, all_items, on_select)
 			else
 				state.category_filter = choice
 			end
+			state.save_filters()
 			state.current_index = 1
 			M.render(bufnr, all_items, on_select)
 		end)
