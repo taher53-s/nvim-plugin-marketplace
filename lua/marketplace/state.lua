@@ -292,7 +292,14 @@ function M.sync_installed_from_filesystem()
 end
 
 -------------------------------------------------
--- Find plugin by name
+-- Fast plugin config lookup (dict-based, O(1))
+-------------------------------------------------
+function M.get_plugin_config(name)
+	return data.plugin_configs[name]
+end
+
+-------------------------------------------------
+-- Find plugin by name (legacy array search, kept for compat)
 -------------------------------------------------
 function M.find_plugin_by_name(name)
 	for _, plugin in ipairs(data.plugins) do
