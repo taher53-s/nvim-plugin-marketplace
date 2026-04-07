@@ -639,6 +639,44 @@ function M.update_all(on_done)
 	end
 end
 -------------------------------------------------
+-- Update all outdated plugins (incremental: skip up-to-date plugins)
+-------------------------------------------------
+function M.update_outdated(on_done)
+	local outdated = {}
+
+	for name in pairs(M.installed) do
+		local drift = M.drift_cache[name]
+		if drift == "Outdated" then
+			local plugin = M.find_plugin_by_name(name)
+			if plugin then
+				table.insert(outdated, plugin)
+			end
+		end
+	end
+
+	if #outdated == 0 then
+		logger.info("No outdated plugins to update")
+		if on_done then on_done("All plugins up to date") end
+		return
+	end
+
+	logger.info("Updating " .. #outdated .. " outdated plugin(s)...")
+
+	local total = #outdated
+	local completed = 0
+
+	for _, plugin in ipairs(outdated) do
+		M.update(plugin, function()
+			completed = completed + 1
+			if completed == total and on_done then
+				logger.info("Outdated plugins updated")
+				on_done("Updated " .. total .. " plugin(s)")
+			end
+		end)
+	end
+end
+
+-------------------------------------------------
 -- Restore from lockfile
 -------------------------------------------------
 function M.restore_from_lockfile(on_done)
