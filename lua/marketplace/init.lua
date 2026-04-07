@@ -23,9 +23,65 @@ local function apply_plugin_settings()
 	end
 end
 
+-- Validate plugin configuration entries
+local function validate_plugin_config(name, config, errors)
+	errors = errors or {}
+
+	if config.lazy ~= nil and type(config.lazy) ~= "boolean" then
+		table.insert(errors, name .. ".lazy must be boolean")
+	end
+
+	if config.priority ~= nil and type(config.priority) ~= "number" then
+		table.insert(errors, name .. ".priority must be number")
+	end
+
+	if config.load_event then
+		if type(config.load_event) ~= "table" then
+			table.insert(errors, name .. ".load_event must be table")
+		elseif type(config.load_event.event) ~= "string" or config.load_event.event == "" then
+			table.insert(errors, name .. ".load_event.event must be non-empty string")
+		end
+	end
+
+	if config.dependencies then
+		if type(config.dependencies) ~= "table" then
+			table.insert(errors, name .. ".dependencies must be table")
+		else
+			for i, dep in ipairs(config.dependencies) do
+				if type(dep) ~= "string" or dep == "" then
+					table.insert(errors, name .. ".dependencies[" .. i .. "] must be non-empty string")
+				end
+			end
+		end
+	end
+
+	return errors
+end
+
+-- Validate full config before applying
+local function validate_config()
+	local errors = {}
+
+	for name, config in pairs(M.config.plugin_settings) do
+		if not data.plugin_configs[name] then
+			table.insert(errors, "Unknown plugin in plugin_settings: " .. name)
+		else
+			validate_plugin_config(name, config, errors)
+		end
+	end
+
+	return errors
+end
+
 -- Allow user configuration (future-proofing)
 function M.setup(opts)
 	M.config = vim.tbl_extend("force", M.config, opts or {})
+
+	-- Validate config before applying
+	local errors = validate_config()
+	if #errors > 0 then
+		error("Marketplace config validation failed:\n  " .. table.concat(errors, "\n  "))
+	end
 
 	-- Apply user plugin settings (e.g. custom priority, lazy flag)
 	apply_plugin_settings()
