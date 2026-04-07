@@ -151,6 +151,29 @@ function M.render(bufnr, all_items, on_select)
 	table.insert(lines, "🛒 Plugin Marketplace")
 	table.insert(lines, "")
 
+	-- Smart update badge: count outdated and untracked plugins
+	local outdated_count = 0
+	local untracked_count = 0
+	for _, item in ipairs(items) do
+		if state.is_installed(item) then
+			local s = state.drift_cache[item.name]
+			if s == "Outdated" then
+				outdated_count = outdated_count + 1
+			elseif s == "Untracked" then
+				untracked_count = untracked_count + 1
+			end
+		end
+	end
+	if outdated_count > 0 then
+		table.insert(lines, "🔄 " .. outdated_count .. " update(s) available   ⬆ use U to update")
+	end
+	if untracked_count > 0 then
+		table.insert(lines, "⚠ " .. untracked_count .. " untracked plugin(s)")
+	end
+	if outdated_count > 0 or untracked_count > 0 then
+		table.insert(lines, "")
+	end
+
 	if #items == 0 then
 		table.insert(lines, "No plugins found")
 	else
