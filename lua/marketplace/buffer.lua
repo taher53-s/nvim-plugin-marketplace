@@ -115,6 +115,13 @@ local function set_keymaps(bufnr, all_items, on_select)
 		end)
 	end, { buffer = bufnr })
 
+	-- Manual refresh (clears drift cache and re-renders)
+	vim.keymap.set("n", "r", function()
+		state.clear_drift_cache()
+		state.sync_installed_from_filesystem()
+		M.render(bufnr, all_items, on_select)
+	end, { buffer = bufnr })
+
 	-- Clear search
 	vim.keymap.set("n", "<Esc>", function()
 		if state.query ~= "" then
@@ -187,7 +194,7 @@ function M.render(bufnr, all_items, on_select)
 	else
 		table.insert(
 			lines,
-			"j/k: move   i: install   u: uninstall   U: update   A: update all   R: restore   /: search   q: quit"
+			"j/k: move   i: install   u: uninstall   U: update   A: update all   R: restore   r: refresh   /: search   q: quit"
 		)
 	end
 
