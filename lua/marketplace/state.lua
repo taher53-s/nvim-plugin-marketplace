@@ -813,7 +813,7 @@ function M.health_check(plugin, callback)
 end
 
 -------------------------------------------------
--- Runtimepath loading with priority-based order
+-- Runtimepath loading with priority-based order (batch-optimized)
 -------------------------------------------------
 function M.load_installed_plugins()
 	-- Collect all installed plugins with their priorities
@@ -832,7 +832,8 @@ function M.load_installed_plugins()
 		return a.priority < b.priority
 	end)
 
-	-- Load in priority order
+	-- Batch paths for immediate loading (non-lazy)
+	local immediate_paths = {}
 	for _, item in ipairs(to_load) do
 		local config = item.config
 		local path = item.path
@@ -852,10 +853,16 @@ function M.load_installed_plugins()
 				})
 			end
 		else
+			-- Skip if already in rtp
 			if not string.find(vim.o.runtimepath, path, 1, true) then
-				vim.opt.rtp:append(path)
+				table.insert(immediate_paths, path)
 			end
 		end
+	end
+
+	-- Batch append all immediate paths at once (single rtp mutation)
+	if #immediate_paths > 0 then
+		vim.opt.rtp:append(unpack(immediate_paths))
 	end
 end
 
