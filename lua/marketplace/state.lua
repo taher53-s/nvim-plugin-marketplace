@@ -152,6 +152,25 @@ function M.load_lockfile()
 end
 
 -------------------------------------------------
+-- Auto-sync lockfile: reconcile installed plugins with lock entries
+-- Removes lock entries for plugins that are no longer installed
+-------------------------------------------------
+function M.sync_lockfile()
+	local changed = false
+
+	for name in pairs(M.lock) do
+		if not M.is_installed({ name = name }) then
+			M.lock[name] = nil
+			changed = true
+		end
+	end
+
+	if changed then
+		M.save_lockfile()
+	end
+end
+
+-------------------------------------------------
 -- Persist and restore filter state across sessions
 -------------------------------------------------
 
