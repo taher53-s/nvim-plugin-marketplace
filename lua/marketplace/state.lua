@@ -9,6 +9,8 @@ local logger = require("marketplace.logger")
 -------------------------------------------------
 local data_path = vim.fn.stdpath("data") .. "/marketplace.json"
 local lockfile_path = vim.fn.stdpath("data") .. "/marketplace-lock.json"
+local drift_cache_path = vim.fn.stdpath("data") .. "/marketplace-drift-cache.json"
+local filter_path = vim.fn.stdpath("data") .. "/marketplace-filters.json"
 
 M.install_path = vim.fn.stdpath("data") .. "/marketplace_plugins"
 
@@ -95,6 +97,99 @@ function M.load_lockfile()
 	local ok, decoded = pcall(vim.fn.json_decode, content)
 	if ok and type(decoded) == "table" then
 		M.lock = decoded
+	end
+end
+
+-------------------------------------------------
+-- Persist and restore filter state across sessions
+-------------------------------------------------
+
+function M.save_filters()
+	local file = io.open(filter_path, "w")
+	if file then
+		file:write(vim.fn.json_encode({
+			query = M.query,
+			category_filter = M.category_filter,
+		}))
+		file:close()
+	end
+end
+
+function M.load_filters()
+	local file = io.open(filter_path, "r")
+	if not file then
+		return
+	end
+
+	local content = file:read("*a")
+	file:close()
+
+	local ok, decoded = pcall(vim.fn.json_decode, content)
+	if ok and type(decoded) == "table" then
+		M.query = decoded.query or ""
+		M.category_filter = decoded.category_filter or ""
+	end
+end
+
+-------------------------------------------------
+-- Persist drift cache to disk
+-------------------------------------------------
+function M.save_drift_cache()
+	local file = io.open(drift_cache_path, "w")
+	if file then
+		file:write(vim.fn.json_encode(M.drift_cache))
+		file:close()
+	end
+end
+
+-------------------------------------------------
+-- Load drift cache from disk
+-------------------------------------------------
+function M.load_drift_cache()
+	local file = io.open(drift_cache_path, "r")
+	if not file then
+		return
+	end
+
+	local content = file:read("*a")
+	file:close()
+
+	local ok, decoded = pcall(vim.fn.json_decode, content)
+	if ok and type(decoded) == "table" then
+		M.drift_cache = decoded
+	end
+end
+
+-------------------------------------------------
+-- Persist filter state across sessions
+-------------------------------------------------
+function M.save_filters()
+	local file = io.open(filter_path, "w")
+	if file then
+		file:write(vim.fn.json_encode({
+			query = M.query,
+			category_filter = M.category_filter,
+		}))
+		file:close()
+	end
+end
+
+-------------------------------------------------
+-- Load filter state from previous session
+-------------------------------------------------
+function M.load_filters()
+	local file = io.open(filter_path, "r")
+	if not file then
+		return
+	end
+
+	local content = file:read("*a")
+	file:close()
+
+	local ok, decoded = pcall(vim.fn.json_decode, content)
+	if ok and type(decoded) == "table" then
+		M.query = decoded.query or ""
+		M.category_filter = decoded.category_filter or ""
 	end
 end
 
@@ -236,9 +331,11 @@ function M.uninstall(plugin)
 
 	M.installed[name] = nil
 	M.lock[name] = nil
+	M.drift_cache[name] = nil
 
 	M.save()
 	M.save_lockfile()
+	M.save_drift_cache()
 end
 
 -------------------------------------------------
@@ -411,6 +508,7 @@ end
 -------------------------------------------------
 function M.clear_drift_cache()
 	M.drift_cache = {}
+	os.remove(drift_cache_path)
 end
 
 -------------------------------------------------
@@ -425,6 +523,7 @@ function M.check_drift_cached(plugin, callback)
 
 	M.check_drift(plugin, function(status)
 		M.drift_cache[plugin.name] = status
+		M.save_drift_cache()
 		callback(status)
 	end)
 end
