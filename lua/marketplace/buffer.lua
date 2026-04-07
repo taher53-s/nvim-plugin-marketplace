@@ -261,9 +261,20 @@ function M.render(bufnr, all_items, on_select)
 
 	table.insert(lines, "")
 
-	if state.query ~= "" then
-		table.insert(lines, "Search: " .. state.query .. "   (Esc to clear)")
+	-- Footer: plugin count + help text
+	local total = #all_items
+	local shown = #items
+	local count_str
+	if shown < total then
+		count_str = "Showing " .. shown .. " of " .. total .. " plugins"
 	else
+		count_str = total .. " plugins"
+	end
+
+	if state.query ~= "" then
+		table.insert(lines, count_str .. "   Search: " .. state.query .. "   (Esc to clear)")
+	else
+		table.insert(lines, count_str)
 		table.insert(
 			lines,
 			"j/k: move   i: install   u: uninstall   U: update   A: update all   R: restore   r: refresh   c: category   /: search   q: quit"
