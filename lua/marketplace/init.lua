@@ -86,10 +86,20 @@ function M.setup(opts)
 	-- Apply user plugin settings (e.g. custom priority, lazy flag)
 	apply_plugin_settings()
 
+	-- Load essential state synchronously (fast)
 	state.load()
 	state.load_lockfile()
-	state.sync_installed_from_filesystem()
-	state.load_installed_plugins()
+	state.sync_lockfile()
+	state.load_filters()
+	state.load_drift_cache()
+	state.load_metadata_cache()
+
+	-- Defer heavy filesystem scan and rtp loading (async, non-blocking)
+	vim.defer_fn(function()
+		state.sync_installed_from_filesystem()
+		state.load_installed_plugins()
+		logger.info("Marketplace runtime loaded")
+	end, 50)
 end
 
 -- Entry point called by :Marketplace
