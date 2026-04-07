@@ -25,6 +25,7 @@ M.installed = {}
 M.lock = {}
 M.installing = {}
 M.drift_cache = {}
+M.disabled = {}  -- Track disabled plugins
 
 -------------------------------------------------
 -- Post-install hooks registry
@@ -52,6 +53,23 @@ function M.run_hooks(event, ...)
 			fn(...)
 		end
 	end
+end
+
+-------------------------------------------------
+-- Enable/disable plugin toggle
+-------------------------------------------------
+function M.is_disabled(plugin)
+	return M.disabled[plugin.name] == true
+end
+
+function M.disable_plugin(plugin)
+	M.disabled[plugin.name] = true
+	logger.info("Disabled " .. plugin.name)
+end
+
+function M.enable_plugin(plugin)
+	M.disabled[plugin.name] = nil
+	logger.info("Enabled " .. plugin.name)
 end
 
 -------------------------------------------------
@@ -750,6 +768,10 @@ end
 function M.is_installed(plugin)
 	local path = M.get_plugin_path(plugin)
 	return vim.fn.isdirectory(path) == 1
+end
+
+function M.is_enabled(plugin)
+	return M.is_installed(plugin) and not M.is_disabled(plugin)
 end
 
 return M
