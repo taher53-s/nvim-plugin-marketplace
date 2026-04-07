@@ -48,11 +48,24 @@ local function set_keymaps(bufnr, all_items, on_select)
 			return
 		end
 
-		state.install(plugin, function()
-			M.render(bufnr, all_items, on_select)
-		end)
+		if state.is_installed(plugin) then
+			on_select(plugin, "Already installed")
+			return
+		end
 
-		M.render(bufnr, all_items, on_select)
+		vim.ui.select(
+			{ "Yes", "No" },
+			{ prompt = "Install " .. plugin.name .. "?" },
+			function(choice)
+				if choice == "Yes" then
+					M.render(bufnr, all_items, on_select)
+					state.install(plugin, function()
+						M.render(bufnr, all_items, on_select)
+					end)
+					M.render(bufnr, all_items, on_select)
+				end
+			end
+		)
 	end, { buffer = bufnr })
 
 	-- Uninstall
@@ -63,10 +76,23 @@ local function set_keymaps(bufnr, all_items, on_select)
 			return
 		end
 
-		on_select(plugin, "Uninstalling...")
-		state.uninstall(plugin)
-		on_select(plugin, "Uninstalled successfully")
-		M.render(bufnr, all_items, on_select)
+		if not state.is_installed(plugin) then
+			on_select(plugin, "Plugin is not installed")
+			return
+		end
+
+		vim.ui.select(
+			{ "Yes", "No" },
+			{ prompt = "Uninstall " .. plugin.name .. "?" },
+			function(choice)
+				if choice == "Yes" then
+					on_select(plugin, "Uninstalling...")
+					state.uninstall(plugin)
+					on_select(plugin, "Uninstalled successfully")
+					M.render(bufnr, all_items, on_select)
+				end
+			end
+		)
 	end, { buffer = bufnr })
 
 	-- Update
