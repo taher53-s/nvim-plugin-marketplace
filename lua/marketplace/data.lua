@@ -12,6 +12,44 @@ M.categories = {
 	"Git",
 }
 
+-- Plugin groups for organizing related plugins
+M.groups = {
+	"Essential",
+	"UI Enhancement",
+	"Developer Tools",
+	"Language Support",
+	"Testing",
+}
+
+-- Map plugins to groups
+M.plugin_groups = {
+	["plenary.nvim"] = { "Essential", "Developer Tools" },
+	["telescope.nvim"] = { "Essential", "Developer Tools" },
+	["nvim-tree.lua"] = { "UI Enhancement" },
+	["lualine.nvim"] = { "UI Enhancement" },
+	["catppuccin.nvim"] = { "UI Enhancement" },
+	["nvim-lspconfig"] = { "Language Support" },
+	["cmp.nvim"] = { "Language Support" },
+	["gitsigns.nvim"] = { "Developer Tools" },
+}
+
+function M.get_groups_for_plugin(name)
+	return M.plugin_groups[name] or {}
+end
+
+function M.get_plugins_in_group(group_name)
+	local result = {}
+	for plugin_name, groups in pairs(M.plugin_groups) do
+		for _, g in ipairs(groups) do
+			if g == group_name then
+				table.insert(result, plugin_name)
+				break
+			end
+		end
+	end
+	return result
+end
+
 -- Plugin configuration (extended metadata + dependency graph)
 M.plugin_configs = {
 	["plenary.nvim"] = {
