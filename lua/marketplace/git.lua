@@ -4,19 +4,37 @@ local utils = require("marketplace.utils")
 -------------------------------------------------
 -- Clone repository
 -------------------------------------------------
-function M.clone(repo, path, callback)
+function M.clone(repo, path, arg3, arg4)
+	local on_progress, on_done
+	if type(arg4) == "function" then
+		on_progress = arg3
+		on_done = arg4
+	else
+		on_progress = function() end
+		on_done = arg3
+	end
+
 	local cmd = {
 		"git",
 		"clone",
+		"--progress",
 		"--depth",
 		"1",
 		repo,
 		path,
 	}
 
-	utils.run_async(cmd, function(success, output)
+	utils.run_async_stream(cmd, function(data)
+		local percentage = data:match("Receiving objects:%s*(%d+)%%")
+		if not percentage then
+			percentage = data:match("Resolving deltas:%s*(%d+)%%")
+		end
+		if percentage then
+			on_progress(tonumber(percentage))
+		end
+	end, function(success, output)
 		vim.schedule(function()
-			callback(success, output)
+			on_done(success, output)
 		end)
 	end)
 end

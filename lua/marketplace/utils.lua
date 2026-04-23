@@ -11,4 +11,22 @@ function M.run_async(cmd, callback)
 	end)
 end
 
+function M.run_async_stream(cmd, on_progress, on_done)
+	vim.system(cmd, {
+		text = true,
+		stderr = function(err, data)
+			if data then
+				vim.schedule(function()
+					on_progress(data)
+				end)
+			end
+		end
+	}, function(obj)
+		local success = obj.code == 0
+		vim.schedule(function()
+			on_done(success, obj.stdout or obj.stderr)
+		end)
+	end)
+end
+
 return M

@@ -1,370 +1,292 @@
--- Responsible for rendering the marketplace list buffer
--- Handles rendering, navigation, highlighting, and search
-
 local M = {}
-
 local state = require("marketplace.state")
-
+local api = require("marketplace.api")
 local ns = vim.api.nvim_create_namespace("marketplace")
 
--- Debounce helper (avoids redundant re-renders)
-local render_debounce_timer = nil
-local function debounce(fn, delay_ms)
-	return function(...)
-		if render_debounce_timer then
-			vim.fn.timer_stop(render_debounce_timer)
+function M.build_display_list()
+	local list = {}
+	if state.search_mode then
+		for _, p in ipairs(state.search_results) do
+			table.insert(list, p)
 		end
-		render_debounce_timer = vim.fn.timer_start(delay_ms, function()
-			render_debounce_timer = nil
-			fn(...)
-		end)
+	else
+		-- HOME DASHBOARD MODE
+		table.insert(list, { is_header = true, name = "⭐ Installed Plugins" })
+		local has_installed = false
+		for plugin_name, _ in pairs(state.installed) do
+			has_installed = true
+			table.insert(list, {
+				name = plugin_name,
+				repo = state.lock[plugin_name] and state.lock[plugin_name].repo or "Locally installed",
+				desc = "Installed mechanically on local disk.",
+				author = "Local Drive",
+				stars = 0
+			})
+		end
+		
+		if not has_installed then
+			table.insert(list, { is_header = true, name = "   (No plugins installed natively yet)" })
+		end
+
+		table.insert(list, { is_header = true, name = "" }) -- Spacer
+		table.insert(list, { is_header = true, name = "🔥 Community Recommended" })
+		
+		if #state.recommended == 0 and not state.is_loading then
+			table.insert(list, { is_header = true, name = "   (No recommendations downloaded)" })
+		end
+		
+		local count = 0
+		for _, p in ipairs(state.recommended) do
+			-- Deduplicate so installed plugins don't show twice
+			if not state.installed[p.name] then
+				table.insert(list, p)
+				count = count + 1
+				if count >= 10 then break end
+			end
+		end
 	end
+	return list
 end
 
--- Layout:
--- Line 1: Title
--- Line 2: Empty spacer
--- Line 3+: Plugin list
-local LIST_START_LINE = 3
-
----------------------------------------------------------------------
--- Setup keymaps (called once per buffer)
----------------------------------------------------------------------
-local function set_keymaps(bufnr, all_items, on_select)
-	-- Move down
-	vim.keymap.set("n", "j", function()
-		local items = state.filter(all_items)
-		state.move(1, #items)
-		M.update_selection(bufnr, items, on_select)
-	end, { buffer = bufnr })
-
-	-- Move up
-	vim.keymap.set("n", "k", function()
-		local items = state.filter(all_items)
-		state.move(-1, #items)
-		M.update_selection(bufnr, items, on_select)
-	end, { buffer = bufnr })
-
-	-- Enter preview
-	vim.keymap.set("n", "<CR>", function()
-		local items = state.filter(all_items)
-		local plugin = items[state.current_index]
-		if plugin then
-			on_select(plugin)
-		end
-	end, { buffer = bufnr })
-
-	-- Install
-	vim.keymap.set("n", "i", function()
-		local filtered = state.filter(all_items)
-		local plugin = filtered[state.current_index]
-		if not plugin then
-			return
-		end
-
-		if state.is_installed(plugin) then
-			on_select(plugin, "Already installed")
-			return
-		end
-
-		vim.ui.select(
-			{ "Yes", "No" },
-			{ prompt = "Install " .. plugin.name .. "?" },
-			function(choice)
-				if choice == "Yes" then
-					M.render(bufnr, all_items, on_select)
-					state.install(plugin, function()
-						M.render(bufnr, all_items, on_select)
-					end)
-					M.render(bufnr, all_items, on_select)
-				end
-			end
-		)
-	end, { buffer = bufnr })
-
-	-- Uninstall
-	vim.keymap.set("n", "u", function()
-		local items = state.filter(all_items)
-		local plugin = items[state.current_index]
-		if not plugin then
-			return
-		end
-
-		if not state.is_installed(plugin) then
-			on_select(plugin, "Plugin is not installed")
-			return
-		end
-
-		vim.ui.select(
-			{ "Yes", "No" },
-			{ prompt = "Uninstall " .. plugin.name .. "?" },
-			function(choice)
-				if choice == "Yes" then
-					on_select(plugin, "Uninstalling...")
-					state.uninstall(plugin)
-					on_select(plugin, "Uninstalled successfully")
-					M.render(bufnr, all_items, on_select)
-				end
-			end
-		)
-	end, { buffer = bufnr })
-
-	-- Update
-	vim.keymap.set("n", "U", function()
-		local items = state.filter(all_items)
-		local plugin = items[state.current_index]
-		if not plugin then
-			return
-		end
-
-		if not state.is_installed(plugin) then
-			on_select(plugin, "Plugin is not installed")
-			return
-		end
-
-		on_select(plugin, "Updating...")
-		local ok, message = state.update(plugin)
-
-		if ok then
-			on_select(plugin, message)
-		else
-			on_select(plugin, "Update failed")
-		end
-	end, { buffer = bufnr })
-
-	-- Update all
-	vim.keymap.set("n", "A", function()
-		state.update_all(function()
-			M.render(bufnr, all_items, on_select)
-		end)
-	end, { buffer = bufnr })
-
-	-- Restore
-	vim.keymap.set("n", "R", function()
-		state.restore_from_lockfile(function()
-			M.render(bufnr, all_items, on_select)
-		end)
-	end, { buffer = bufnr })
-
-	-- Search
-	vim.keymap.set("n", "/", function()
-		vim.ui.input({ prompt = "Search: " }, function(input)
-			state.query = input or ""
-			state.current_index = 1
-			M.render(bufnr, all_items, on_select)
-		end)
-	end, { buffer = bufnr })
-
-	-- Manual refresh (clears drift cache and re-renders)
-	vim.keymap.set("n", "r", function()
-		state.clear_drift_cache()
-		state.sync_installed_from_filesystem()
-		M.render(bufnr, all_items, on_select)
-	end, { buffer = bufnr })
-
-	-- Category filter
-	vim.keymap.set("n", "c", function()
-		local categories = { "All" }
-		for _, cat in ipairs(data.categories) do
-			table.insert(categories, cat)
-		end
-
-		vim.ui.select(categories, { prompt = "Filter by category:" }, function(choice)
-			if choice == "All" then
-				state.category_filter = ""
-			else
-				state.category_filter = choice
-			end
-			state.save_filters()
-			state.current_index = 1
-			M.render(bufnr, all_items, on_select)
-		end)
-	end, { buffer = bufnr })
-
-	-- Clear search
-	vim.keymap.set("n", "<Esc>", function()
-		if state.query ~= "" then
-			state.query = ""
-			state.current_index = 1
-			M.render(bufnr, all_items, on_select)
-		end
-	end, { buffer = bufnr })
-end
-
----------------------------------------------------------------------
--- Render list
----------------------------------------------------------------------
-function M.render(bufnr, all_items, on_select)
-	-- Debounce render to avoid redundant re-renders within 100ms
-	if M._render_timer then
-		vim.fn.timer_stop(M._render_timer)
-	end
-	M._render_timer = vim.fn.timer_start(100, function()
-		M._render_timer = nil
-		_do_render(bufnr, all_items, on_select)
-	end)
-end
-
-local function _do_render(bufnr, all_items, on_select)
-	local items = state.filter(all_items)
-
-	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
-	vim.api.nvim_buf_set_option(bufnr, "buftype", "nofile")
-	vim.api.nvim_buf_set_option(bufnr, "bufhidden", "wipe")
-	vim.api.nvim_buf_set_option(bufnr, "swapfile", false)
-
-	-- Clear ALL highlights before rebuilding
-	vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+function M.render(bufnr, winid)
+    if not vim.api.nvim_buf_is_valid(bufnr) then return end
 
 	local lines = {}
+	state.current_display = M.build_display_list()
 
-	local title = "🛒 Plugin Marketplace"
-	if state.category_filter ~= "" then
-		title = title .. "  |  📂 " .. state.category_filter
-	end
-	table.insert(lines, title)
+	table.insert(lines, " 📦 Neovim Plugin Marketplace (Powered by GitHub)")
 	table.insert(lines, "")
 
-	-- Smart update badge: count outdated and untracked plugins
-	local outdated_count = 0
-	local untracked_count = 0
-	for _, item in ipairs(items) do
-		if state.is_installed(item) then
-			local s = state.drift_cache[item.name]
-			if s == "Outdated" then
-				outdated_count = outdated_count + 1
-			elseif s == "Untracked" then
-				untracked_count = untracked_count + 1
-			end
-		end
-	end
-	if outdated_count > 0 then
-		table.insert(lines, "🔄 " .. outdated_count .. " update(s) available   ⬆ use U to update")
-	end
-	if untracked_count > 0 then
-		table.insert(lines, "⚠ " .. untracked_count .. " untracked plugin(s)")
-	end
-	if outdated_count > 0 or untracked_count > 0 then
-		table.insert(lines, "")
-	end
-
-	if #items == 0 then
-		table.insert(lines, "No plugins found")
+	if state.is_loading then
+		table.insert(lines, "  ⏳ Searching global GitHub repository data...")
 	else
-		for i, item in ipairs(items) do
-			local label = i .. ". " .. item.name
-
-			if state.installing[item.name] then
-				label = label .. "   ⏳ Installing"
-			elseif state.is_installed(item) then
-				local drift_status = state.drift_cache[item.name]
-				if drift_status == "Outdated" then
-					label = label .. "   ✅ Installed ⬆ Outdated"
-				elseif drift_status == "Untracked" then
-					label = label .. "   ✅ Installed ⚠ Untracked"
+		if #state.current_display == 0 then
+			table.insert(lines, "  Press '/' to dynamically search plugins directly via Github.")
+		else
+			for i, item in ipairs(state.current_display) do
+				if item.is_header then
+					table.insert(lines, "  " .. item.name)
 				else
-					label = label .. "   ✅ Installed"
-				end
-
-				-- Background drift check (async, updates cache)
-				state.check_drift_cached(item, function(status)
-					if status ~= drift_status and status then
-						vim.schedule(function()
-							if vim.api.nvim_buf_is_valid(bufnr) then
-								M.render(bufnr, all_items, on_select)
-							end
-						end)
+					local prefix = "  "
+					if i == state.current_index then prefix = "➜ " end
+					
+					local status = state.installed[item.name] and "✅ [Installed]" or "❌ [Available]"
+					
+					-- Render native streaming installation bar
+					local prog = state.progress[item.name]
+					if prog then
+						local bars_to_show = math.floor(prog / 10)
+						local bar = string.rep("█", bars_to_show) .. string.rep("░", 10 - bars_to_show)
+						status = string.format("⏳  [%s] %d%%", bar, prog)
 					end
-				end)
-			else
-				label = label .. "   ❌ Not installed"
-			end
 
-			table.insert(lines, label)
+					table.insert(lines, prefix .. item.name .. " " .. status)
+				end
+			end
 		end
 	end
 
 	table.insert(lines, "")
-
-	-- Footer: plugin count + help text
-	local total = #all_items
-	local shown = #items
-	local count_str
-	if shown < total then
-		count_str = "Showing " .. shown .. " of " .. total .. " plugins"
+	table.insert(lines, " -------------------------------------------------------------")
+	table.insert(lines, " <CR>: Info  |  i: Install  |  u: Uninstall  |  U: Update")
+	if state.search_mode then
+		table.insert(lines, " /: Search | f: Sort/Filter | c/<BS>: Go Home | A: Update All | q: Quit")
 	else
-		count_str = total .. " plugins"
+		table.insert(lines, " /: Search | f: Sort/Filter | A: Update All   | R: Restore    | q: Quit")
 	end
 
-	if state.query ~= "" then
-		table.insert(lines, count_str .. "   Search: " .. state.query .. "   (Esc to clear)")
-	else
-		table.insert(lines, count_str)
-		table.insert(
-			lines,
-			"j/k: move   i: install   u: uninstall   U: update   A: update all   R: restore   r: refresh   c: category   /: search   q: quit"
-		)
-	end
-
+	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 
-	-- Highlight title and footer
+	-- Minimal elegant highlights
+	vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceTitle", 0, 0, -1)
+	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceFooter", #lines - 2, 0, -1)
 	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceFooter", #lines - 1, 0, -1)
 
-	-- Empty state handling
-	if #items == 0 then
-		state.current_index = 0
-		on_select(nil)
-		return
+	-- Inject Right-Aligned Virtual Extmarks!
+	vim.api.nvim_set_hl(0, "MarketplaceExtmarkStars", { fg = "#e3b341" })
+	vim.api.nvim_set_hl(0, "MarketplaceExtmarkAuthor", { fg = "#666666", italic = true })
+	
+	if not state.is_loading and #state.current_display > 0 then
+		for i, item in ipairs(state.current_display) do
+			if not item.is_header then
+				local virt_text = {}
+				if item.stars and type(item.stars) == "number" and item.stars > 0 then
+					table.insert(virt_text, { string.format("★ %s", item.stars), "MarketplaceExtmarkStars" })
+				end
+				if item.author and item.author ~= "unknown" and item.author ~= "Local Drive" then
+					table.insert(virt_text, { "  | By " .. item.author, "MarketplaceExtmarkAuthor" })
+				end
+				if #virt_text > 0 then
+					pcall(vim.api.nvim_buf_set_extmark, bufnr, ns, 1 + i, 0, {
+						virt_text = virt_text,
+						virt_text_pos = "right_align",
+					})
+				end
+			end
+		end
 	end
 
-	-- Clamp selection safely
-	if state.current_index < 1 then
-		state.current_index = 1
-	elseif state.current_index > #items then
-		state.current_index = #items
-	end
+    if #state.current_display > 0 and state.current_index > 0 then
+        -- Fast forward index if it somehow landed on a header
+        if state.current_display[state.current_index] and state.current_display[state.current_index].is_header then
+            for idx, d in ipairs(state.current_display) do
+                if not d.is_header then
+                    state.current_index = idx
+                    break
+                end
+            end
+        end
 
-	M.update_selection(bufnr, items, on_select)
-
-	if not vim.b[bufnr].marketplace_mapped then
-		set_keymaps(bufnr, all_items, on_select)
-		vim.b[bufnr].marketplace_mapped = true
-	end
+        -- Highlight current cursor securely with boundary checks
+        if state.current_display[state.current_index] and not state.current_display[state.current_index].is_header then
+            vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceSelected", state.current_index + 2 - 1, 0, -1)
+            if vim.api.nvim_win_is_valid(winid) then
+                vim.api.nvim_win_set_cursor(winid, { state.current_index + 2, 0 })
+            end
+        end
+    end
 end
 
----------------------------------------------------------------------
--- Update selection
----------------------------------------------------------------------
-function M.update_selection(bufnr, items, on_select)
-	if state.current_index == 0 then
-		return
+function M.set_keymaps(bufnr, winid, ui_module)
+	local function refresh()
+		M.render(bufnr, winid)
 	end
+    local function get_plugin()
+        local item = state.current_display[state.current_index]
+        if item and not item.is_header then return item end
+        return nil
+    end
 
-	vim.api.nvim_win_set_cursor(0, {
-		LIST_START_LINE + state.current_index - 1,
-		0,
-	})
+	vim.keymap.set("n", "j", function()
+		if state.current_index < #state.current_display then
+			repeat
+				state.current_index = state.current_index + 1
+			until state.current_index == #state.current_display or not state.current_display[state.current_index].is_header
+		end
+		refresh()
+	end, { buffer = bufnr })
 
-	M.highlight(bufnr)
+	vim.keymap.set("n", "k", function()
+		if state.current_index > 1 then
+			repeat
+				state.current_index = state.current_index - 1
+			until state.current_index == 1 or not state.current_display[state.current_index].is_header
+		end
+		refresh()
+	end, { buffer = bufnr })
 
-	local plugin = items[state.current_index]
-	if plugin then
-		on_select(plugin)
+	vim.keymap.set("n", "/", function()
+		vim.ui.input({ prompt = "Search Github: " }, function(input)
+            if input and input ~= "" then
+                state.search_mode = true
+                state.last_query = input
+                state.is_loading = true
+                state.current_index = 1
+                refresh()
+                api.search_github(input, function(success, results)
+                    state.is_loading = false
+                    if success then state.search_results = results end
+                    refresh()
+                end)
+            elseif input == "" then
+				-- Empty query snaps straight back Home
+                state.search_mode = false
+                state.current_index = 1
+                refresh()
+            end
+		end)
+	end, { buffer = bufnr })
+
+	vim.keymap.set("n", "f", function()
+        local options = {
+            "1. Sort by: Best Match" .. (state.sort_method == "" and " (Active)" or ""),
+            "2. Sort by: Most Stars" .. (state.sort_method == "stars" and " (Active)" or ""),
+            "3. Sort by: Recently Updated" .. (state.sort_method == "updated" and " (Active)" or ""),
+            "4. Toggle Strict Neovim Filter" .. (state.strict_filter and " (Currently ON)" or " (Currently OFF)")
+        }
+        
+        vim.ui.select(options, { prompt = "Filter & Sort API Results:" }, function(choice)
+            if not choice then return end
+            
+            if choice:match("Best Match") then state.sort_method = ""
+            elseif choice:match("Most Stars") then state.sort_method = "stars"
+            elseif choice:match("Recently Updated") then state.sort_method = "updated"
+            elseif choice:match("Strict Neovim Filter") then state.strict_filter = not state.strict_filter
+            end
+
+            if state.search_mode and state.last_query and state.last_query ~= "" then
+                state.is_loading = true
+                state.current_index = 1
+                refresh()
+                api.search_github(state.last_query, function(success, results)
+                    state.is_loading = false
+                    if success then state.search_results = results end
+                    refresh()
+                end)
+            else
+                vim.notify("Filter Settings Updated. Try searching to see the effect!")
+            end
+        end)
+    end, { buffer = bufnr })
+
+	-- Clear Search / Return Home Mappings
+	local clear_search = function()
+		if state.search_mode then
+			state.search_mode = false
+			state.current_index = 1
+			vim.notify("Returned to Home Dashboard")
+			refresh()
+		end
 	end
-end
+	vim.keymap.set("n", "c", clear_search, { buffer = bufnr })
+	vim.keymap.set("n", "<BS>", clear_search, { buffer = bufnr })
 
----------------------------------------------------------------------
--- Highlight selection
----------------------------------------------------------------------
-function M.highlight(bufnr)
-	if state.current_index == 0 then
-		return
-	end
+    vim.keymap.set("n", "<CR>", function()
+        local p = get_plugin()
+        if p then ui_module.open_info_popup(p) end
+    end, { buffer = bufnr })
 
-	vim.api.nvim_buf_add_highlight(bufnr, ns, "MarketplaceSelected", LIST_START_LINE + state.current_index - 2, 0, -1)
+    vim.keymap.set("n", "i", function()
+        local p = get_plugin()
+        if p and not state.installed[p.name] then
+            state.install(p, function(percent, msg) 
+                if percent then
+                    state.progress[p.name] = percent
+                else
+                    state.progress[p.name] = nil
+                    vim.notify(msg)
+                end
+                refresh()
+            end)
+        else
+            vim.notify("Already installed")
+        end
+    end, { buffer = bufnr })
+
+    vim.keymap.set("n", "u", function()
+        local p = get_plugin()
+        if p and state.installed[p.name] then
+            state.uninstall(p, function(msg) vim.notify(msg) refresh() end)
+        end
+    end, { buffer = bufnr })
+
+    vim.keymap.set("n", "U", function()
+        local p = get_plugin()
+        if p and state.installed[p.name] then
+            state.update(p, function(msg) vim.notify(msg) refresh() end)
+        end
+    end, { buffer = bufnr })
+
+    vim.keymap.set("n", "A", function()
+        state.update_all(function(msg) vim.notify(msg) refresh() end)
+    end, { buffer = bufnr })
+
+    vim.keymap.set("n", "R", function()
+        state.restore_from_lockfile(function(msg) vim.notify(msg) refresh() end)
+    end, { buffer = bufnr })
 end
 
 return M
